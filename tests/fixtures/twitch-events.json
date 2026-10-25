@@ -1,0 +1,12 @@
+{
+  "cases": [
+    { "name": "chat", "payload": { "metadata": { "message_id": "chat-message-123" }, "event": { "chatter_user_id": "viewer-7", "message_id": "chat-message-123", "message_timestamp": "2025-01-01T00:00:00Z", "message": { "text": "!law when someone subs grow wings" } } }, "expected": { "event_type": "channel.chat.message", "timestamp": 1735689600000, "message_id": "chat-message-123" } },
+    { "name": "follow", "payload": { "metadata": { "message_id": "follow-msg-1" }, "event": { "user_id": "viewer-8", "followed_at": "2025-01-01T00:00:01Z" } }, "expected": { "event_type": "channel.follow", "timestamp": 1735689601000, "message_id": "follow-msg-1" } },
+    { "name": "subscribe", "payload": { "metadata": { "message_id": "sub-msg-1" }, "event": { "user_id": "viewer-9", "is_gift": false } }, "expected": { "event_type": "channel.subscribe", "timestamp": 1735689600000, "message_id": "sub-msg-1" } },
+    { "name": "gift", "payload": { "metadata": { "message_id": "gift-msg-1" }, "event": { "user_id": "viewer-10", "total": 2 } }, "expected": { "event_type": "channel.subscription.gift", "timestamp": 1735689600000, "message_id": "gift-msg-1" } },
+    { "name": "cheer", "payload": { "metadata": { "message_id": "cheer-msg-1" }, "event": { "user_id": "viewer-11", "bits": 100 } }, "expected": { "event_type": "channel.cheer", "timestamp": 1735689600000, "message_id": "cheer-msg-1" } },
+    { "name": "raid", "payload": { "metadata": { "message_id": "raid-msg-1" }, "event": { "from_broadcaster_user_id": "viewer-12", "viewers": 20 } }, "expected": { "event_type": "channel.raid", "timestamp": 1735689600000, "message_id": "raid-msg-1" } },
+    { "name": "hype_train", "payload": { "metadata": { "message_id": "hype-msg-1" }, "event": { "id": "train-1", "level": 1, "started_at": "2025-01-01T00:00:03Z" } }, "expected": { "event_type": "channel.hype_train.begin", "timestamp": 1735689603000, "message_id": "hype-msg-1" } }
+  ],
+  "chatCommand": { "metadata": { "message_id": "chat-message-123" }, "event": { "chatter_user_id": "viewer-7", "message_id": "chat-message-123", "message_timestamp": "2025-01-01T00:00:00Z", "message": { "text": "!law when someone subs grow wings" } } }
+}

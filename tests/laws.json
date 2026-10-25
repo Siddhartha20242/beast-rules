@@ -1,0 +1,36 @@
+{
+  "compile": [
+    { "text": "when someone subs grow wings and shake the screen", "expect": { "status": "ok", "event_type": "channel.subscribe", "action": "screen_shake", "part_id": "wings" } },
+    { "text": "every follow gives the beast horns", "expect": { "status": "ok", "event_type": "channel.follow", "action": "confetti", "part_id": "horns" } },
+    { "text": "on a raid make the beast roar and grow flames", "expect": { "status": "ok", "event_type": "channel.raid", "action": "beast_roar", "part_id": "flames" } },
+    { "text": "when someone cheers bits give it purple lightning", "expect": { "status": "ok", "event_type": "channel.cheer", "part_id": "lightning", "color": "purple" } },
+    { "text": "if chat hits 30 messages a minute flash the screen and grow spikes", "expect": { "status": "ok", "event_type": "channel.chat.message", "threshold": 30, "action": "screen_flash", "part_id": "spikes" } },
+    { "text": "gift subs make the beast grow a golden crown", "expect": { "status": "ok", "event_type": "channel.subscription.gift", "part_id": "crown", "color": "yellow" } },
+    { "text": "when a hype train starts throw confetti and grow extra arms", "expect": { "status": "ok", "event_type": "channel.hype_train.begin", "action": "confetti", "part_id": "extra_arms" } },
+    { "text": "every 5 subs switch to scene 2 and grow armor", "expect": { "status": "ok", "event_type": "channel.subscribe", "threshold": 5, "action": "obs_scene_2", "part_id": "armor" } },
+    { "text": "when chat gets loud trigger dare 1", "expect": { "status": "ok", "event_type": "channel.chat.message", "action": "dare_1", "part_id": "runes" } },
+    { "text": "follows make the beast grow red eyes", "expect": { "status": "ok", "event_type": "channel.follow", "part_id": "eyes", "color": "red" } },
+    { "text": "10 cheers gives it blue tentacles and a screen shake", "expect": { "status": "ok", "event_type": "channel.cheer", "threshold": 10, "action": "screen_shake", "part_id": "tentacles", "color": "blue" } },
+    { "text": "raids give the beast a green shell", "expect": { "status": "ok", "event_type": "channel.raid", "part_id": "shell", "color": "green" } },
+    { "text": "when someone subs give it a long pink tail", "expect": { "status": "ok", "event_type": "channel.subscribe", "part_id": "tail", "color": "pink" } },
+    { "text": "chat spamming 50 messages a minute triggers dare 3 and claws", "expect": { "status": "ok", "event_type": "channel.chat.message", "threshold": 50, "action": "dare_3", "part_id": "claws" } },
+    { "text": "subs summon lightning and the beast roars", "expect": { "status": "ok", "event_type": "channel.subscribe", "action": "beast_roar", "part_id": "lightning" } },
+    { "text": "new followers make it grow scales and flash orange", "expect": { "status": "ok", "event_type": "channel.follow", "action": "screen_flash", "part_id": "scales", "color": "orange" } },
+    { "text": "when someone donates ten dollars grow wings", "expect": { "status": "unsupported_trigger" } },
+    { "text": "when the streamer dies in the game grow horns", "expect": { "status": "unsupported_trigger" } },
+    { "text": "make the beast dance when someone subs", "expect": { "status": "unsupported_effect" } },
+    { "text": "grow a laser cannon when someone subs", "expect": { "status": "unsupported_part" } },
+    { "text": "switch to scene 7 on a raid", "expect": { "status": "unsupported_effect" } },
+    { "text": "make it cooler", "expect": { "status": "too_vague" } },
+    { "text": "something with the beast", "expect": { "status": "too_vague" } },
+    { "text": "do stuff", "expect": { "status": "too_vague" } },
+    { "text": "ban the loudest chatter whenever chat is busy", "expect": { "status": "unsafe" } },
+    { "text": "when someone subs show the streamer's home address", "expect": { "status": "unsafe" } },
+    { "text": "grow horns and tell chat to harass the mod", "expect": { "status": "unsafe" } },
+    { "text": "timeout everyone who follows", "expect": { "status": "unsafe" } }
+  ],
+  "conflicts": [
+    { "laws": ["when someone subs grow wings", "when someone follows grow a tail"], "expect": "crisis", "zone": "back" },
+    { "laws": ["subs grow horns", "raids grow red eyes"], "expect": "crisis", "zone": "head" }
+  ]
+}

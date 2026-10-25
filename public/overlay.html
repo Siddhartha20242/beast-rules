@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Constitution Beast Overlay</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; color: #f7f7ff; }
+    body { position: relative; }
+    #scene { position: absolute; inset: 0; display: grid; place-items: center; }
+    #beast-wrap { position: absolute; width: min(55vh, 46vw, 620px); aspect-ratio: 1; top: 3vh; filter: drop-shadow(0 18px 18px #080b1c44); }
+    #beast { width: 100%; height: 100%; overflow: visible; }
+    .body-shape { fill: #626d8f; stroke: #202943; stroke-width: 8; stroke-linejoin: round; }
+    .body-belly { fill: #8993b1; opacity: .82; }
+    .part { opacity: 0; transition: opacity .45s ease; }
+    .part.active { opacity: 1; }
+    .part-fill { fill: var(--part-color, #c7d2fe); stroke: #202943; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+    .part-detail { fill: #fff; stroke: #202943; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+    .eye-white { fill: #fff7d6; stroke: #202943; stroke-width: 5; }
+    .pupil { fill: #202943; }
+    #hud { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: min(680px, 92vw); display: grid; gap: 10px; }
+    .panel { background: #171d33e8; border: 1px solid #9aa8d944; border-radius: 16px; padding: 12px 16px; box-shadow: 0 8px 26px #05071366; backdrop-filter: blur(8px); }
+    #howto { text-align: center; color: #fff; font-size: clamp(16px, 2vw, 23px); font-weight: 800; letter-spacing: .015em; }
+    #howto strong { color: #ffd166; }
+    #vote { display: none; }
+    #vote.show { display: block; }
+    #proposal-text { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 7px; }
+    #vote-track { height: 12px; background: #353d59; border-radius: 99px; overflow: hidden; display: flex; }
+    #yes-bar { background: #73e0a9; width: 0%; transition: width .25s ease; }
+    #no-bar { background: #ff6b7a; flex: 1; transition: width .25s ease; }
+    #vote-label { margin-top: 6px; display: flex; justify-content: space-between; color: #c4c9dc; font-size: 12px; }
+    #laws { display: flex; gap: 7px; overflow: hidden; white-space: nowrap; min-height: 18px; color: #c4c9dc; font-size: 12px; }
+    #laws .law { overflow: hidden; text-overflow: ellipsis; }
+    #laws .id { color: #ffd166; font-weight: 800; }
+    #laws .law.highlighted { color: #ffe17a; text-shadow: 0 0 12px #ffc400; }
+    #notice { display:none; position:absolute; z-index:5; left:50%; top:18px; transform:translateX(-50%); padding:12px 18px; border:1px solid #ffcc66; border-radius:10px; background:#24190de8; color:#ffe5b4; font-weight:700; }
+    #sim-tag { position: absolute; right: 22px; top: 20px; padding: 5px 9px; border-radius: 6px; background: #ffd166; color: #29233a; font-size: 10px; font-weight: 900; letter-spacing: .08em; opacity: 0; transition: opacity .2s; }
+    #sim-tag.visible { opacity: 1; }
+    #flash { position: fixed; inset: 0; pointer-events: none; background: #fff; opacity: 0; }
+    #flash.play { animation: flash .35s ease-out; }
+    .shake #beast-wrap { animation: shake .4s ease-in-out; }
+    .confetti-piece { position: fixed; top: -14px; width: 9px; height: 14px; border-radius: 2px; pointer-events: none; animation: fall 1.6s linear forwards; }
+    @keyframes flash { 15% { opacity: .72; } 100% { opacity: 0; } }
+    @keyframes shake { 0%,100% { transform: translateX(0) rotate(0); } 20% { transform: translateX(-12px) rotate(-2deg); } 45% { transform: translateX(10px) rotate(2deg); } 70% { transform: translateX(-7px) rotate(-1deg); } }
+    @keyframes fall { to { transform: translateY(110vh) rotate(620deg); opacity: .2; } }
+  </style>
+</head>
+<body>
+  <div id="notice"></div>
+  <div id="scene">
+    <div id="beast-wrap" aria-label="The evolving Constitution Beast">
+      <svg id="beast" viewBox="0 0 500 500" role="img" aria-label="Flat SVG beast with five mutation zones">
+        <!-- Aura: flames, runes, lightning -->
+        <g class="part" data-part="flames"><path class="part-fill" d="M86 290 Q48 232 91 186 Q82 226 118 229 Q94 183 137 131 Q132 199 174 222 L158 310Z"/><path class="part-fill" d="M414 290 Q452 232 409 186 Q418 226 382 229 Q406 183 363 131 Q368 199 326 222 L342 310Z"/></g>
+        <g class="part" data-part="runes"><path class="part-fill" d="M66 206l18-23 18 23-18 23zM398 206l18-23 18 23-18 23zM75 330h20m-10-10v20m330-10h-20m10-10v20" fill="none"/><circle class="part-detail" cx="84" cy="206" r="5"/><circle class="part-detail" cx="416" cy="206" r="5"/></g>
+        <g class="part" data-part="lightning"><path class="part-fill" d="M108 104h42l-23 48h31l-65 72 17-55H82zM392 104h-42l23 48h-31l65 72-17-55h28z"/></g>
+
+        <!-- Back zone -->
+        <g class="part" data-part="wings"><path class="part-fill" d="M157 218Q72 186 49 109Q112 117 155 164Q113 104 124 64Q184 103 202 176Z"/><path class="part-fill" d="M343 218Q428 186 451 109Q388 117 345 164Q387 104 376 64Q316 103 298 176Z"/></g>
+        <g class="part" data-part="tail"><path class="part-fill" d="M342 323Q414 338 403 392Q396 430 444 427Q416 470 376 444Q337 419 359 376L321 355Z"/></g>
+        <g class="part" data-part="shell"><path class="part-fill" d="M172 220Q250 164 328 220L344 326Q250 375 156 326Z"/><path class="part-detail" d="M250 184v167m-89-99h178m-164 73h150" fill="none"/></g>
+
+        <!-- Limbs zone -->
+        <g class="part" data-part="tentacles"><path class="part-fill" d="M167 325Q125 364 153 397Q181 416 143 447Q199 448 205 410L215 350zM333 325Q375 364 347 397Q319 416 357 447Q301 448 295 410L285 350z"/></g>
+        <g class="part" data-part="claws"><path class="part-fill" d="M145 343l-42 47 44-8 8 38 32-55zM355 343l42 47-44-8-8 38-32-55z"/></g>
+        <g class="part" data-part="extra_arms"><path class="part-fill" d="M157 260Q98 250 81 289L116 302 77 322Q124 337 170 307zM343 260Q402 250 419 289L384 302 423 322Q376 337 330 307z"/></g>
+
+        <!-- Beast body -->
+        <path class="body-shape" d="M250 112C178 112 139 171 145 252L157 331Q167 372 250 379Q333 372 343 331L355 252C361 171 322 112 250 112Z"/>
+        <path class="body-belly" d="M196 250Q250 224 304 250L293 330Q250 354 207 330Z"/>
+
+        <!-- Torso zone -->
+        <g class="part" data-part="spikes"><path class="part-fill" d="M157 206l-36-20 25 51-32 22 40 13M343 206l36-20-25 51 32 22-40 13"/></g>
+        <g class="part" data-part="armor"><path class="part-fill" d="M183 213Q250 187 317 213L303 299Q250 321 197 299Z"/><path class="part-detail" d="M250 201v105m-55-67h110" fill="none"/></g>
+        <g class="part" data-part="scales"><path class="part-fill" d="M190 235q12-20 24 0-12 20-24 0m24 25q12-20 24 0-12 20-24 0m24-25q12-20 24 0-12 20-24 0m24 25q12-20 24 0-12 20-24 0m24-25q12-20 24 0-12 20-24 0m-96 50q12-20 24 0-12 20-24 0m24 0q12-20 24 0-12 20-24 0m24 0q12-20 24 0-12 20-24 0m24 0q12-20 24 0-12 20-24 0"/></g>
+
+        <!-- Head zone -->
+        <g class="part" data-part="horns"><path class="part-fill" d="M178 143Q127 111 141 55Q162 92 202 111ZM322 143Q373 111 359 55Q338 92 298 111Z"/></g>
+        <g class="part" data-part="crown"><path class="part-fill" d="M183 115l9-42 32 28 26-43 26 43 32-28 9 42Z"/><path class="part-detail" d="M186 118h128" fill="none"/></g>
+        <g class="part" data-part="eyes"><ellipse class="eye-white" cx="213" cy="173" rx="20" ry="15"/><ellipse class="eye-white" cx="287" cy="173" rx="20" ry="15"/><circle class="pupil" cx="217" cy="175" r="7"/><circle class="pupil" cx="283" cy="175" r="7"/></g>
+        <path d="M232 199Q250 212 268 199" fill="none" stroke="#202943" stroke-width="6" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+  <div id="sim-tag">SIM</div>
+  <div id="flash"></div>
+  <section id="hud">
+    <div id="vote" class="panel">
+      <div id="proposal-text"></div>
+      <div id="vote-track"><div id="yes-bar"></div><div id="no-bar"></div></div>
+      <div id="vote-label"><span id="yes-label">YES 0</span><span id="vote-time"></span><span id="no-label">NO 0</span></div>
+    </div>
+    <div id="laws" class="panel" aria-live="polite"></div>
+    <div id="howto" class="panel">Type <strong>!law &lt;idea&gt;</strong></div>
+  </section>
+  <script>
+    const overlayColors = { red: "#ff5d68", orange: "#ff9f43", yellow: "#ffd166", green: "#63d995", cyan: "#45d5d0", blue: "#5c9dff", purple: "#b27aff", pink: "#ff7eb6" };
+    const socketUrl = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
+    let reconnectDelay = 500;
+    let simTimer;
+    let countdownTimer;
+    let noticeTimer;
+    let highlightedLawId = "";
+
+    function showSim() {
+      const tag = document.getElementById("sim-tag");
+      tag.classList.add("visible");
+      clearTimeout(simTimer);
+      simTimer = setTimeout(() => tag.classList.remove("visible"), 3000);
+    }
+
+    function render(state) {
+      const partMap = state.beast_parts || {};
+      for (const group of document.querySelectorAll(".part[data-part]")) {
+        const partId = group.dataset.part;
+        const active = Object.values(partMap).find((part) => part.part_id === partId);
+        group.classList.toggle("active", Boolean(active));
+        if (active) group.style.setProperty("--part-color", overlayColors[active.color] || "#c7d2fe");
+      }
+
+      const laws = document.getElementById("laws");
+      laws.replaceChildren();
+      for (const law of state.active_laws || []) {
+        const item = document.createElement("span");
+        item.className = "law";
+        if (law.id === highlightedLawId) item.classList.add("highlighted");
+        const id = document.createElement("span");
+        id.className = "id";
+        id.textContent = `${law.id} `;
+        item.append(id, document.createTextNode(law.raw_text));
+        laws.append(item);
+      }
+      if (!laws.children.length) laws.textContent = "No active laws yet — write the beast together.";
+
+      const proposal = state.proposal;
+      const vote = document.getElementById("vote");
+      vote.classList.toggle("show", Boolean(proposal));
+      if (proposal) {
+        const total = Math.max(1, proposal.yes + proposal.no);
+        document.getElementById("proposal-text").textContent = `${proposal.proposalId}: ${proposal.text || "New law"}`;
+        document.getElementById("yes-bar").style.width = `${proposal.yes / total * 100}%`;
+        document.getElementById("no-bar").style.width = `${proposal.no / total * 100}%`;
+        document.getElementById("yes-label").textContent = `YES ${proposal.yes}`;
+        document.getElementById("no-label").textContent = `NO ${proposal.no}`;
+        clearInterval(countdownTimer);
+        const updateCountdown = () => {
+          const seconds = Math.max(0, Math.ceil((proposal.endsAt - Date.now()) / 1000));
+          document.getElementById("vote-time").textContent = `${seconds}s left`;
+        };
+        updateCountdown();
+        countdownTimer = setInterval(updateCountdown, 500);
+      } else {
+        clearInterval(countdownTimer);
+      }
+    }
+
+    function confetti() {
+      const colors = Object.values(overlayColors);
+      for (let i = 0; i < 38; i += 1) {
+        const piece = document.createElement("i");
+        piece.className = "confetti-piece";
+        piece.style.left = `${Math.random() * 100}vw`;
+        piece.style.background = colors[i % colors.length];
+        piece.style.animationDelay = `${Math.random() * .45}s`;
+        document.body.append(piece);
+        setTimeout(() => piece.remove(), 2300);
+      }
+    }
+
+    function roar() {
+      try {
+        const context = new AudioContext();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = "sawtooth";
+        oscillator.frequency.setValueAtTime(115, context.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(42, context.currentTime + .45);
+        gain.gain.setValueAtTime(.001, context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(.09, context.currentTime + .05);
+        gain.gain.exponentialRampToValueAtTime(.001, context.currentTime + .5);
+        oscillator.connect(gain).connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime + .52);
+        oscillator.onended = () => context.close();
+      } catch { /* Audio is optional in OBS browser sources. */ }
+    }
+
+    function effect(name) {
+      const scene = document.getElementById("scene");
+      if (name === "screen_shake") {
+        scene.classList.remove("shake");
+        void scene.offsetWidth;
+        scene.classList.add("shake");
+      } else if (name === "screen_flash") {
+        const flash = document.getElementById("flash");
+        flash.classList.remove("play");
+        void flash.offsetWidth;
+        flash.classList.add("play");
+      } else if (name === "confetti") confetti();
+      else if (name === "beast_roar") roar();
+    }
+
+    function connect() {
+      const socket = new WebSocket(socketUrl);
+      socket.addEventListener("open", () => { reconnectDelay = 500; });
+      socket.addEventListener("message", (message) => {
+        const data = JSON.parse(message.data);
+        if (data.type === "snapshot") render(data);
+        else if (data.type === "highlight") {
+          highlightedLawId = data.lawId;
+          const item = [...document.querySelectorAll(".law")].find((entry) => entry.querySelector(".id")?.textContent.trim() === highlightedLawId);
+          item?.classList.add("highlighted");
+          item?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+        } else if (data.type === "notice") {
+          const notice = document.getElementById("notice");
+          notice.textContent = data.message;
+          notice.style.display = "block";
+          clearTimeout(noticeTimer);
+          noticeTimer = setTimeout(() => { notice.style.display = "none"; }, 4500);
+        }
+        else if (data.type === "effect") {
+          if (data.sim || data.effect === "sim_event") showSim();
+          effect(data.effect);
+        }
+      });
+      socket.addEventListener("close", () => {
+        setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(5000, reconnectDelay * 1.7);
+      });
+      socket.addEventListener("error", () => socket.close());
+    }
+    connect();
+  </script>
+</body>
+</html>

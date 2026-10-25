@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Constitution Beast — Sandbox</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #0c1020; color: #f6f5ff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 18% 0%, #293265 0, #12172a 40%, #0c1020 78%); }
+    header { max-width: 1280px; margin: auto; padding: 24px 28px 10px; display: flex; align-items: center; justify-content: space-between; }
+    .brand { font-size: 20px; font-weight: 900; letter-spacing: -.03em; }
+    .brand span { color: #ffd166; }
+    .pill { border: 1px solid #5a6596; color: #adb7e0; border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+    main { max-width: 1280px; margin: auto; padding: 12px 28px 28px; display: grid; grid-template-columns: minmax(350px, 420px) 1fr; gap: 18px; }
+    .card { border: 1px solid #ffffff16; border-radius: 18px; background: #171d32dd; box-shadow: 0 18px 42px #05081755; padding: 18px; }
+    h1 { font-size: 27px; line-height: 1.08; margin: 0 0 8px; }
+    h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .09em; color: #aab4db; margin: 0 0 12px; }
+    p { color: #aab1c8; font-size: 13px; line-height: 1.5; margin: 0 0 18px; }
+    .section { margin-top: 20px; }
+    .viewers { display: grid; grid-template-columns: repeat(5,1fr); gap: 7px; }
+    button { color: #f8f7ff; cursor: pointer; border: 1px solid #41496b; background: #252d49; border-radius: 10px; padding: 10px 9px; font-weight: 750; transition: .15s; }
+    button:hover { border-color: #ffd166; transform: translateY(-1px); }
+    button.selected { background: #ffd166; border-color: #ffd166; color: #27233b; }
+    button.primary { background: #7667e8; border-color: #9488ff; }
+    button.vote-yes { background: #276e5e; border-color: #4bc99c; }
+    button.vote-no { background: #733747; border-color: #ef667b; }
+    textarea { width: 100%; min-height: 84px; resize: vertical; background: #0e1426; color: #f8f7ff; border: 1px solid #41496b; border-radius: 11px; padding: 12px; font: inherit; font-size: 13px; outline: none; }
+    textarea:focus { border-color: #a396ff; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .row { display: flex; gap: 8px; }
+    .row button { flex: 1; }
+    #message { color: #bdc5de; min-height: 19px; font-size: 12px; margin-top: 10px; }
+    #message.error { color: #ff8694; }
+    .stage { position: relative; min-height: 650px; overflow: hidden; display: flex; flex-direction: column; }
+    .stage::before { content: ""; position: absolute; width: 72%; aspect-ratio: 1; top: 3%; left: 14%; border-radius: 50%; background: radial-gradient(circle, #30385c 0%, #1c2340 52%, transparent 72%); }
+    .stage-head { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; }
+    .stage-head span { color: #8d98c0; font-size: 12px; }
+    iframe { position: relative; z-index: 1; border: 0; width: 100%; flex: 1; min-height: 580px; background: transparent; }
+    .events button { min-height: 46px; }
+    .hint { color: #7983a5; font-size: 11px; margin-top: 8px; }
+    @media (max-width: 880px) { main { grid-template-columns: 1fr; } .stage { min-height: 540px; } iframe { min-height: 470px; } }
+  </style>
+</head>
+<body>
+  <header><div class="brand">CONSTITUTION <span>BEAST</span></div><div class="pill">LOCAL SANDBOX · NO TWITCH LOGIN</div></header>
+  <main>
+    <section class="card">
+      <h1>Chat makes the laws.<br>The laws make the beast.</h1>
+      <p>Choose a pretend viewer, propose a law, and vote it into the creature. Events below test the law after it passes.</p>
+
+      <div class="section"><h2>Act as a viewer</h2><div class="viewers" id="viewers"></div></div>
+      <div class="section"><h2>Propose a law</h2><textarea id="law-text">When someone subs grow wings and shake the screen</textarea><div class="row" style="margin-top:8px"><button class="primary" id="propose">Compile and propose</button></div></div>
+      <div class="section"><h2>Vote on the current proposal</h2><div class="row"><button class="vote-yes" id="yes">Vote yes</button><button class="vote-no" id="no">Vote no</button></div><div class="hint">One vote per viewer. The vote closes after VOTE_SECONDS.</div></div>
+      <div class="section events"><h2>Fire a simulated event</h2><div class="actions">
+        <button data-event="follow">Follow</button><button data-event="sub">Subscribe</button><button data-event="raid">Raid</button><button data-event="cheer">Cheer</button><button data-event="chat-spike">Chat spike</button>
+      </div><div class="hint">Each button marks the overlay with a SIM tag. Chat spike sends 30 messages in the one-minute window.</div></div>
+      <div id="message" role="status" aria-live="polite">Select a viewer to begin.</div>
+    </section>
+    <section class="card stage">
+      <div class="stage-head"><h2>Overlay preview</h2><span id="connection">Connecting…</span></div>
+      <iframe title="Transparent stream overlay preview" src="/overlay.html"></iframe>
+    </section>
+  </main>
+  <script>
+    let viewer = "viewer_1";
+    const viewers = document.getElementById("viewers");
+    const message = document.getElementById("message");
+    for (let index = 1; index <= 5; index += 1) {
+      const name = `viewer_${index}`;
+      const button = document.createElement("button");
+      button.textContent = name;
+      button.classList.toggle("selected", index === 1);
+      button.addEventListener("click", () => {
+        viewer = name;
+        for (const item of viewers.children) item.classList.toggle("selected", item.textContent === viewer);
+        message.classList.remove("error");
+        message.textContent = `Acting as ${viewer}.`;
+      });
+      viewers.append(button);
+    }
+
+    async function post(path, body) {
+      try {
+        const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Request failed.");
+        message.classList.remove("error");
+        message.textContent = result.event ? `SIM ${result.event} fired${result.fired.length ? ` law ${result.fired.join(", ")}` : " — no active trigger matched"}.` : "Done.";
+      } catch (error) {
+        message.classList.add("error");
+        message.textContent = error.message;
+      }
+    }
+
+    document.getElementById("propose").addEventListener("click", () => post("/api/sandbox/propose", { viewerId: viewer, text: document.getElementById("law-text").value }));
+    document.getElementById("yes").addEventListener("click", () => post("/api/sandbox/vote", { viewerId: viewer, choice: "yes" }));
+    document.getElementById("no").addEventListener("click", () => post("/api/sandbox/vote", { viewerId: viewer, choice: "no" }));
+    for (const button of document.querySelectorAll("[data-event]")) button.addEventListener("click", () => post("/api/sandbox/event", { event: button.dataset.event }));
+
+    const socket = new WebSocket(`${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`);
+    socket.addEventListener("open", () => { document.getElementById("connection").textContent = "Overlay connected"; });
+    socket.addEventListener("close", () => { document.getElementById("connection").textContent = "Overlay reconnecting…"; });
+  </script>
+</body>
+</html>

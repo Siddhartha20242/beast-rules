@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ConstitutionBeastRule",
+  "description": "Compiler output. Every field is required and every object is closed so it works with strict structured outputs. id, raw_text and zone are assigned by code, never by the model. No free-text fields: nothing the model writes can reach the screen.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "trigger", "action", "mutation"],
+  "properties": {
+    "status": { "type": "string", "enum": ["ok", "unsupported_trigger", "unsupported_effect", "unsupported_part", "too_vague", "unsafe"] },
+    "trigger": {
+      "type": "object", "additionalProperties": false, "required": ["event_type", "threshold"],
+      "properties": {
+        "event_type": { "type": "string", "enum": ["channel.follow", "channel.subscribe", "channel.subscription.gift", "channel.cheer", "channel.raid", "channel.chat.message", "channel.hype_train.begin"] },
+        "threshold": { "type": "integer", "minimum": 1, "maximum": 100, "description": "Events needed to fire. For channel.chat.message: messages per minute." }
+      }
+    },
+    "action": {
+      "type": "object", "additionalProperties": false, "required": ["type", "intensity"],
+      "properties": {
+        "type": { "type": "string", "enum": ["screen_shake", "screen_flash", "confetti", "beast_roar", "obs_scene_1", "obs_scene_2", "obs_scene_3", "dare_1", "dare_2", "dare_3"] },
+        "intensity": { "type": "string", "enum": ["low", "medium", "high"] }
+      }
+    },
+    "mutation": {
+      "type": "object", "additionalProperties": false, "required": ["part_id", "color"],
+      "properties": {
+        "part_id": { "type": "string", "enum": ["horns", "eyes", "crown", "spikes", "armor", "scales", "wings", "tail", "shell", "tentacles", "claws", "extra_arms", "flames", "runes", "lightning"] },
+        "color": { "type": "string", "enum": ["red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink"] }
+      }
+    }
+  }
+}
