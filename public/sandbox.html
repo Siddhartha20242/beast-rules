@@ -27,6 +27,7 @@
     button.vote-no { background: #733747; border-color: #ef667b; }
     textarea { width: 100%; min-height: 84px; resize: vertical; background: #0e1426; color: #f8f7ff; border: 1px solid #41496b; border-radius: 11px; padding: 12px; font: inherit; font-size: 13px; outline: none; }
     textarea:focus { border-color: #a396ff; }
+    #compiler-path { min-height:16px; margin-top:5px; color:#9ea9ce; font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
     .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .row { display: flex; gap: 8px; }
     .row button { flex: 1; }
@@ -52,7 +53,7 @@
       <p>Choose a pretend viewer, propose a law, and vote it into the creature. Events below test the law after it passes.</p>
 
       <div class="section"><h2>Act as a viewer</h2><div class="viewers" id="viewers"></div></div>
-      <div class="section"><h2>Propose a law</h2><textarea id="law-text" placeholder="When someone subs grow wings and shake the screen"></textarea><div class="row" style="margin-top:8px"><button class="primary" id="propose">Compile and propose</button></div></div>
+      <div class="section"><h2>Propose a law</h2><textarea id="law-text" placeholder="When someone subs grow wings and shake the screen"></textarea><div id="compiler-path" aria-live="polite"></div><div class="row" style="margin-top:8px"><button class="primary" id="propose">Compile and propose</button></div></div>
       <div class="section"><h2>Vote on the current proposal</h2><div class="row"><button class="vote-yes" id="yes">Vote yes</button><button class="vote-no" id="no">Vote no</button></div><div class="crisis-votes" id="crisis-votes"><button data-crisis-choice="existing">1 · Existing law</button><button data-crisis-choice="proposed">2 · New law</button></div><div class="hint">One vote per viewer. The vote closes after VOTE_SECONDS.</div></div>
       <div class="section events"><h2>Fire a simulated event</h2><div class="actions">
         <button data-event="follow">Follow</button><button data-event="sub">Subscribe</button><button data-event="raid">Raid</button><button data-event="cheer">Cheer</button><button data-event="chat-spike">Chat spike</button>
@@ -107,7 +108,12 @@
     socket.addEventListener("open", () => { document.getElementById("connection").textContent = "Overlay connected"; });
     socket.addEventListener("message", (event) => {
       const state = JSON.parse(event.data);
-      if (state.type === "snapshot") document.getElementById("crisis-votes").classList.toggle("show", Boolean(state.crisis));
+      if (state.type === "snapshot") {
+        document.getElementById("crisis-votes").classList.toggle("show", Boolean(state.crisis));
+        const newestLaw = [...(state.active_laws || [])].sort((left, right) => right.timestamp - left.timestamp)[0];
+        const path = state.crisis?.proposed?.compiler_path || state.proposal?.compiler_path || newestLaw?.compiler_path;
+        document.getElementById("compiler-path").textContent = path ? `Compiler: ${path}` : "";
+      }
     });
     socket.addEventListener("close", () => { document.getElementById("connection").textContent = "Overlay reconnecting…"; });
   </script>

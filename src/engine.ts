@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { zoneForPart, type Zone } from "./schema.js";
+import type { CompilerPath } from "./compiler/auto.js";
 import type { EventType, Rule } from "./compiler/types.js";
 
 const TEN_MINUTES_MS = 10 * 60 * 1000;
@@ -11,6 +12,7 @@ export interface ActiveLaw extends Rule {
   raw_text: string;
   zone: Zone;
   timestamp: number;
+  compiler_path: CompilerPath;
 }
 
 export interface HistoricalLaw extends ActiveLaw {
@@ -131,12 +133,12 @@ export class RuleEngine {
     };
   }
 
-  beginCrisis(rule: Rule, rawText: string, durationSeconds: number): CrisisStartResult {
+  beginCrisis(rule: Rule, rawText: string, durationSeconds: number, compilerPath: CompilerPath = "parser"): CrisisStartResult {
     if (this.crisis) return { status: "busy" };
     if (rule.status !== "ok") throw new Error(`Cannot add a rule with status ${rule.status}`);
     const zone = zoneForPart(rule.mutation.part_id);
     const existing = this.active.get(zone);
-    if (!existing) return { status: "added", law: this.add(rule, rawText).law };
+    if (!existing) return { status: "added", law: this.add(rule, rawText, compilerPath).law };
 
     const now = this.clock();
     const proposed: ActiveLaw = {
@@ -144,7 +146,8 @@ export class RuleEngine {
       id: `law-${this.nextId++}`,
       raw_text: rawText,
       zone,
-      timestamp: now
+      timestamp: now,
+      compiler_path: compilerPath
     };
     this.crisis = {
       zone,
@@ -196,7 +199,7 @@ export class RuleEngine {
     };
   }
 
-  add(rule: Rule, rawText: string): AddLawResult {
+  add(rule: Rule, rawText: string, compilerPath: CompilerPath = "parser"): AddLawResult {
     if (rule.status !== "ok") throw new Error(`Cannot add a rule with status ${rule.status}`);
     const timestamp = this.clock();
     const zone = zoneForPart(rule.mutation.part_id);
@@ -205,7 +208,8 @@ export class RuleEngine {
       id: `law-${this.nextId++}`,
       raw_text: rawText,
       zone,
-      timestamp
+      timestamp,
+      compiler_path: compilerPath
     };
     const previous = this.active.get(zone);
     let replaced: HistoricalLaw | undefined;
@@ -281,8 +285,8 @@ export class RuleEngine {
       const parsed = JSON.parse(readFileSync(this.filePath, "utf8")) as PersistedState;
       if (parsed.version !== 1 || !Array.isArray(parsed.active) || !Array.isArray(parsed.history)) return;
       this.nextId = Math.max(1, parsed.nextId);
-      this.active = new Map(parsed.active.map((law) => [law.zone, law]));
-      this.history = parsed.history;
+      this.active = new Map(parsed.active.map((law) => [law.zone, { ...law, compiler_path: normalizeCompilerPath(law.compiler_path) }]));
+      this.history = parsed.history.map((law) => ({ ...law, compiler_path: normalizeCompilerPath(law.compiler_path) }));
       this.crisis = parsed.crisis;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -300,4 +304,9 @@ export class RuleEngine {
     };
     writeFileSync(this.filePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
   }
+}
+
+function normalizeCompilerPath(path: string | undefined): CompilerPath {
+  if (path === "model (verified)" || path === "parser (model rejected)") return path;
+  return "parser";
 }

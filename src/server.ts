@@ -4,7 +4,10 @@ import { resolve } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import { config } from "./config.js";
 import { RuleEngine, type EngineEvent } from "./engine.js";
+import { AutoCompiler, type CompilerPath } from "./compiler/auto.js";
+import { OllamaCompiler } from "./compiler/ollama.js";
 import { TemplateCompiler } from "./compiler/template.js";
+import type { Rule } from "./compiler/types.js";
 import { VotingManager, type VoteChoice } from "./voting.js";
 import { chatMessageDetails, translateTwitchEvent } from "./twitch/events.js";
 import { startTwitchRuntime, type TwitchRuntime } from "./twitch/runtime.js";
@@ -13,10 +16,12 @@ const app = express();
 const server = createServer(app);
 const sockets = new WebSocketServer({ server });
 const engine = new RuleEngine();
-const compiler = new TemplateCompiler();
+const templateCompiler = new TemplateCompiler();
+const ollamaCompiler = new OllamaCompiler();
+const autoCompiler = new AutoCompiler({ template: templateCompiler, ollama: ollamaCompiler });
 const voting = new VotingManager({ voteSeconds: config.voteSeconds });
 const clients = new Set<WebSocket>();
-let pendingLaw: { id: string; text: string; proposerId: string; rule: Awaited<ReturnType<TemplateCompiler["compile"]>> } | undefined;
+let pendingLaw: { id: string; text: string; proposerId: string; rule: Rule; compilerPath: CompilerPath } | undefined;
 let lastConflict: ReturnType<RuleEngine["add"]>["conflict"];
 let twitchRuntime: TwitchRuntime | undefined;
 let proposalSequence = 0;
@@ -30,7 +35,7 @@ function makeSnapshot() {
   return {
     type: "snapshot",
     active_laws: engine.activeLaws.map(({ id, raw_text, zone, timestamp, ...rule }) => ({
-      id, raw_text, zone, timestamp, trigger: rule.trigger, action: rule.action, mutation: rule.mutation
+      id, raw_text, zone, timestamp, compiler_path: rule.compiler_path, trigger: rule.trigger, action: rule.action, mutation: rule.mutation
     })),
     beast_parts: Object.fromEntries(engine.activeLaws.map((law) => [law.zone, {
       part_id: law.mutation.part_id,
@@ -40,6 +45,7 @@ function makeSnapshot() {
     proposal: current ? {
       ...current,
       text: pendingLaw?.text,
+      compiler_path: pendingLaw?.compilerPath,
       yes: current.yes,
       no: current.no,
       total: current.voters
@@ -47,6 +53,15 @@ function makeSnapshot() {
     crisis: engine.currentCrisis ?? null,
     conflict: lastConflict ?? null
   };
+}
+
+async function compileLaw(text: string): Promise<{ rule: Rule; path: CompilerPath }> {
+  if (config.compiler === "template") return { rule: await templateCompiler.compile(text), path: "parser" };
+  return autoCompiler.compileWithPath(text);
+}
+
+function compilerLabel(path: CompilerPath): string {
+  return path;
 }
 
 function sendSnapshot(socket: WebSocket): void {
@@ -101,9 +116,10 @@ async function handleTwitchChat(userId: string, text: string, messageId: string)
       twitchRuntime?.sendChatReply(crisisProposalMessage);
       return;
     }
-    let rule: Awaited<ReturnType<TemplateCompiler["compile"]>>;
+    let rule: Rule;
+    let compilerPath: CompilerPath;
     try {
-      rule = await compiler.compile(lawText);
+      ({ rule, path: compilerPath } = await compileLaw(lawText));
     } catch {
       showRefusal("too_vague");
       return;
@@ -125,7 +141,7 @@ async function handleTwitchChat(userId: string, text: string, messageId: string)
       twitchRuntime?.sendChatReply(message);
       return;
     }
-    pendingLaw = { id: proposalId, text: lawText, proposerId: userId, rule };
+    pendingLaw = { id: proposalId, text: lawText, proposerId: userId, rule, compilerPath };
     lastConflict = undefined;
     broadcastSnapshot();
     twitchRuntime?.sendChatReply("Law proposed. Vote yes or no in chat.");
@@ -180,7 +196,7 @@ app.post("/api/sandbox/propose", async (request, response) => {
   }
 
   try {
-    const rule = await compiler.compile(text);
+    const { rule, path: compilerPath } = await compileLaw(text);
     if (rule.status !== "ok") {
       response.status(422).json({ error: `Proposal rejected: ${rule.status}` });
       return;
@@ -194,7 +210,7 @@ app.post("/api/sandbox/propose", async (request, response) => {
       response.status(409).json({ error: "A vote is already active or this viewer is on cooldown." });
       return;
     }
-    pendingLaw = { id: proposalId, text, proposerId, rule };
+    pendingLaw = { id: proposalId, text, proposerId, rule, compilerPath };
     lastConflict = undefined;
     broadcastSnapshot();
     response.json({ ok: true, proposalId });
@@ -280,8 +296,13 @@ setInterval(() => {
   const outcome = voting.closeIfExpired();
   if (!outcome) return;
   if (outcome.status === "passed" && pendingLaw) {
-    const result = engine.beginCrisis(pendingLaw.rule, pendingLaw.text, config.crisisSeconds);
-    if (result.status === "added") broadcastEffect(result.law.action.type, true);
+    const result = engine.beginCrisis(pendingLaw.rule, pendingLaw.text, config.crisisSeconds, pendingLaw.compilerPath);
+    if (result.status === "added") {
+      console.info(`Compiler ${compilerLabel(pendingLaw.compilerPath)} handled ${result.law.id}`);
+      broadcastEffect(result.law.action.type, true);
+    } else if (result.status === "started") {
+      console.info(`Compiler ${compilerLabel(pendingLaw.compilerPath)} handled ${result.crisis.proposed.id}`);
+    }
   }
   pendingLaw = undefined;
   broadcastSnapshot();

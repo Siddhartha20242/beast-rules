@@ -13,6 +13,8 @@ export const config = {
   voteSeconds: positiveInteger(process.env.VOTE_SECONDS, 30),
   crisisSeconds: positiveInteger(process.env.CRISIS_SECONDS, 20),
   compiler: compilerValue === "ollama" || compilerValue === "template" ? compilerValue : "auto",
+  ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
+  ollamaModel: process.env.OLLAMA_MODEL ?? "gemma3:4b",
   chatReplies: process.env.CHAT_REPLIES === "on" ? "on" : "off",
   twitchClientId: process.env.TWITCH_CLIENT_ID ?? "",
   twitchClientSecret: process.env.TWITCH_CLIENT_SECRET ?? "",

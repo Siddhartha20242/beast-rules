@@ -40,6 +40,8 @@
     #laws { display: flex; gap: 7px; overflow: hidden; white-space: nowrap; min-height: 18px; color: #c4c9dc; font-size: 12px; }
     #laws .law { overflow: hidden; text-overflow: ellipsis; }
     #laws .id { color: #ffd166; font-weight: 800; }
+    .compiler-label { display:inline-block; margin-left:5px; padding:2px 5px; border-radius:5px; background:#343c5c; color:#b7c1e1; font-size:9px; font-weight:800; vertical-align:1px; }
+    #proposal-compiler { margin:-3px 0 7px; color:#aeb8da; font-size:10px; font-weight:800; }
     #laws .law.highlighted { color: #ffe17a; text-shadow: 0 0 12px #ffc400; }
     #notice { display:none; position:absolute; z-index:5; left:50%; top:18px; transform:translateX(-50%); padding:12px 18px; border:1px solid #ffcc66; border-radius:10px; background:#24190de8; color:#ffe5b4; font-weight:700; }
     #crisis-banner { display:none; position:absolute; z-index:4; top:18px; left:50%; transform:translateX(-50%); width:min(920px,calc(100vw - 24px)); padding:14px; border:2px solid #ff6969; border-radius:16px; background:#341d28f2; box-shadow:0 0 32px #ff3d4b55; }
@@ -139,6 +141,7 @@
   <section id="hud">
     <div id="vote" class="panel">
       <div id="proposal-text"></div>
+      <div id="proposal-compiler"></div>
       <div id="vote-track"><div id="yes-bar"></div><div id="no-bar"></div></div>
       <div id="vote-label"><span id="yes-label">YES 0</span><span id="vote-time"></span><span id="no-label">NO 0</span></div>
     </div>
@@ -180,7 +183,10 @@
         const id = document.createElement("span");
         id.className = "id";
         id.textContent = `${law.id} `;
-        item.append(id, document.createTextNode(law.raw_text));
+        const compilerTag = document.createElement("span");
+        compilerTag.className = "compiler-label";
+        compilerTag.textContent = law.compiler_path || "parser";
+        item.append(id, document.createTextNode(law.raw_text), compilerTag);
         laws.append(item);
       }
       if (!laws.children.length) laws.textContent = "No active laws yet — write the beast together.";
@@ -213,6 +219,7 @@
       if (proposal) {
         const total = Math.max(1, proposal.yes + proposal.no);
         document.getElementById("proposal-text").textContent = proposal.text || "New law";
+        document.getElementById("proposal-compiler").textContent = proposal.compiler_path || "parser";
         document.getElementById("yes-bar").style.width = `${proposal.yes / total * 100}%`;
         document.getElementById("no-bar").style.width = `${proposal.no / total * 100}%`;
         document.getElementById("yes-label").textContent = `YES ${proposal.yes}`;
@@ -226,6 +233,7 @@
         countdownTimer = setInterval(updateCountdown, 500);
       } else {
         clearInterval(countdownTimer);
+        document.getElementById("proposal-compiler").textContent = "";
       }
     }
 

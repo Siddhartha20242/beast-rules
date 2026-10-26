@@ -9,6 +9,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "eval": "node --import tsx scripts/eval.ts",
     "sandbox": "node --import tsx src/server.ts",
     "twitch:auth": "node --import tsx src/twitch/auth.ts",
     "demo": "echo 'Demo replay will be added in roadmap step 8.'",
