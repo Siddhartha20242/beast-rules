@@ -2,6 +2,9 @@ export type VoteToken = "1" | "2" | "3" | "yes" | "no";
 
 export type ChatCommand =
   | { kind: "laws" }
+  | { kind: "constitution" }
+  | { kind: "tongue" }
+  | { kind: "name_beast" }
   | { kind: "repeal"; lawNumber: number }
   | { kind: "law_missing" }
   | { kind: "law_highlight"; lawNumber: number }
@@ -17,6 +20,9 @@ export type ChatCommand =
 export function parseChatCommand(raw: string): ChatCommand {
   const text = raw.trim();
   if (/^!laws$/i.test(text)) return { kind: "laws" };
+  if (/^!constitution$/i.test(text)) return { kind: "constitution" };
+  if (/^!tongue$/i.test(text)) return { kind: "tongue" };
+  if (/^!name$/i.test(text)) return { kind: "name_beast" };
   const repeal = text.match(/^!repeal\s+(?:law-)?(\d{1,4})\s*$/i);
   if (repeal) return { kind: "repeal", lawNumber: Number(repeal[1]) };
   if (/^!law$/i.test(text)) return { kind: "law_missing" };

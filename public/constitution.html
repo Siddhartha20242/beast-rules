@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beast Rules — Constitution</title>
+  <style>
+    :root { color-scheme: light dark; --paper: #fbf7ee; --ink: #23202b; --muted: #6c6578; --accent: #8a5a00; --rule: #d9cfb8; }
+    @media (prefers-color-scheme: dark) { :root { --paper: #15162a; --ink: #eef0ff; --muted: #aab0d6; --accent: #ffd166; --rule: #343868; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.55 Georgia, "Times New Roman", serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 48px 22px 80px; }
+    h1 { font-size: clamp(28px, 6vw, 40px); text-align: center; margin: 0 0 8px; letter-spacing: .01em; }
+    .preamble { text-align: center; font-style: italic; color: var(--muted); margin: 0 auto 28px; max-width: 560px; }
+    .meta { text-align: center; color: var(--muted); font: 14px/1.4 system-ui, sans-serif; margin-bottom: 32px; }
+    article { border-top: 1px solid var(--rule); padding: 18px 0; }
+    article h2 { margin: 0 0 4px; font-size: 20px; }
+    article h2 span { color: var(--accent); }
+    article p { margin: 4px 0; }
+    .byline { color: var(--muted); font: 13px/1.4 system-ui, sans-serif; }
+    .status-repealed, .status-overruled { opacity: .62; }
+    .status-repealed h2, .status-overruled h2 { text-decoration: line-through; text-decoration-thickness: 1px; }
+    .badge { display: inline-block; font: 700 11px/1 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 99px; border: 1px solid var(--rule); margin-left: 8px; vertical-align: 2px; }
+    .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+    footer { text-align: center; color: var(--muted); font: 12px/1.4 system-ui, sans-serif; margin-top: 36px; }
+    @media print { body { background: #fff; color: #000; } .badge { border-color: #999; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 id="title">Constitution</h1>
+    <p class="preamble" id="preamble"></p>
+    <div class="meta" id="meta"></div>
+    <div id="articles"></div>
+    <footer>Every article is written by chat. Names, dates and descriptions come only from validated law values.</footer>
+  </main>
+  <script>
+    (async function load() {
+      const articles = document.getElementById("articles");
+      try {
+        const doc = await (await fetch("/api/constitution")).json();
+        document.title = `Beast Rules — ${doc.title}`;
+        document.getElementById("title").textContent = doc.title;
+        document.getElementById("preamble").textContent = doc.preamble;
+        const parts = [`${doc.summary.active} in force`, `${doc.summary.repealed} repealed`, `${doc.summary.overruled} overruled`];
+        const scarTotal = Object.values(doc.scars || {}).reduce((sum, count) => sum + count, 0);
+        if (scarTotal) parts.push(`${scarTotal} scar${scarTotal === 1 ? "" : "s"} on the beast`);
+        document.getElementById("meta").textContent = parts.join(" · ");
+        if (!doc.articles.length) {
+          const empty = document.createElement("p");
+          empty.className = "empty";
+          empty.textContent = "No laws have been written yet.";
+          articles.append(empty);
+          return;
+        }
+        for (const item of doc.articles) {
+          const section = document.createElement("article");
+          section.className = `status-${item.status}`;
+          const heading = document.createElement("h2");
+          const number = document.createElement("span");
+          number.textContent = `Article ${item.number}. `;
+          heading.append(number, document.createTextNode(item.title));
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = item.status;
+          heading.append(badge);
+          const text = document.createElement("p");
+          text.textContent = item.text;
+          const by = document.createElement("p");
+          by.className = "byline";
+          const enacted = new Date(item.enacted_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+          by.textContent = `${item.proposer ? `Proposed by ${item.proposer} · ` : ""}Enacted ${enacted} · Zone: ${item.zone}${item.note ? ` · ${item.note}` : ""}`;
+          section.append(heading, text, by);
+          articles.append(section);
+        }
+      } catch {
+        const failed = document.createElement("p");
+        failed.className = "empty";
+        failed.textContent = "The constitution could not be loaded. Is the server running?";
+        articles.append(failed);
+      }
+    })();
+  </script>
+</body>
+</html>

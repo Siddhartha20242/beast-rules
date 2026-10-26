@@ -191,6 +191,7 @@ export class BallotManager {
 }
 
 export interface BallotPayload {
+  kind: "law";
   ballot_id: string;
   ends_at: number;
   total: number;
@@ -201,6 +202,7 @@ export interface BallotPayload {
 export function ballotForSnapshot(ballot: BallotSnapshot | undefined): BallotPayload | null {
   if (!ballot) return null;
   return {
+    kind: "law",
     ballot_id: ballot.ballotId,
     ends_at: ballot.endsAt,
     total: ballot.voters,

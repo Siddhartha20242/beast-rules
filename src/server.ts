@@ -25,6 +25,10 @@ import { createLawToast, lawToastsForSnapshot, pushLawToast, type LawToast } fro
 import { loadContractExamples } from "./law-hints.js";
 import { refusalForStatus, type RefusalStatus } from "./refusals.js";
 import { parseChatCommand } from "./chat-commands.js";
+import { BeastProfile, NameVote, beastNameOptions, nameVoteForSnapshot, type NameVoteOutcome } from "./beast-profile.js";
+import { computeTemperament } from "./temperament.js";
+import { buildConstitution, constitutionPanel, scarsByZone, type InfoPanel } from "./constitution.js";
+import { beastTongue } from "./refusals.js";
 import { BallotManager, ballotForSnapshot, shouldOpenBallot, suggestLaws, type BallotOutcome } from "./ballot.js";
 import type { EventType } from "./compiler/types.js";
 
@@ -62,6 +66,10 @@ let lawToasts: LawToast[] = [];
 const lawHints = loadContractExamples();
 const crowdScheduledFor = new Set<string>();
 const ballot = new BallotManager({ ballotSeconds: config.ballotSeconds });
+const profile = new BeastProfile();
+const nameVote = new NameVote({ seconds: config.ballotSeconds });
+let nameSequence = 0;
+let infoPanel: (InfoPanel & { until: number }) | undefined;
 let nextBallotAt = config.ballotMinutes > 0 ? Date.now() + config.ballotMinutes * 60_000 : Number.POSITIVE_INFINITY;
 let ballotSequence = 0;
 let ballotOpening = false;
@@ -114,7 +122,11 @@ function makeSnapshot() {
     vote_ticker: voteTickerForSnapshot(voteTicker),
     law_toasts: lawToastsForSnapshot(lawToasts),
     law_hints: lawHints,
-    ballot: ballotForSnapshot(ballot.current),
+    ballot: ballotForSnapshot(ballot.current) ?? nameVoteForSnapshot(nameVote.current),
+    beast_name: profile.name,
+    temperament: computeTemperament(engine.activeLaws, engine.lawHistory.length),
+    scars: scarsByZone(engine.lawHistory),
+    info_panel: infoPanel && infoPanel.until > Date.now() ? { title: infoPanel.title, rows: infoPanel.rows, until: infoPanel.until } : null,
     laws_panel_until: lawsPanelUntil > Date.now() ? lawsPanelUntil : 0
   };
 }
@@ -210,7 +222,7 @@ function scheduleNextBallot(): void {
 type StartResult = { ok: true } | { ok: false; message: string };
 
 async function openBallot(): Promise<StartResult> {
-  if (ballotOpening || ballot.isOpen) return { ok: false, message: ballotBusyMessage };
+  if (ballotOpening || anyBallotOpen()) return { ok: false, message: ballotBusyMessage };
   if (streamerControls.paused) return { ok: false, message: "The beast is paused. Ballots are disabled until the broadcaster resumes it." };
   if (engine.currentCrisis) return { ok: false, message: crisisProposalMessage };
   if (voting.current) return { ok: false, message: "A vote is already active." };
@@ -253,7 +265,7 @@ function handleBallotOutcome(outcome: BallotOutcome): void {
 function startRepeal(proposerId: string, proposerName: string, lawNumber: number): StartResult {
   if (streamerControls.paused) return { ok: false, message: "The beast is paused. Repeals are disabled until the broadcaster resumes it." };
   if (engine.currentCrisis) return { ok: false, message: crisisProposalMessage };
-  if (ballot.isOpen) return { ok: false, message: ballotBusyMessage };
+  if (anyBallotOpen()) return { ok: false, message: ballotBusyMessage };
   const law = engine.activeLaws.find((item) => item.id === `law-${lawNumber}`);
   if (!law) return { ok: false, message: `There is no active law-${lawNumber}.` };
   const proposalId = `repeal-${Date.now()}-${++proposalSequence}`;
@@ -267,6 +279,52 @@ function startRepeal(proposerId: string, proposerName: string, lawNumber: number
   return { ok: true };
 }
 
+function anyBallotOpen(): boolean {
+  return ballot.isOpen || nameVote.isOpen;
+}
+
+function openChoiceVote(): { kind: "law" | "name"; vote: (userId: string, number: number) => boolean } | undefined {
+  if (ballot.isOpen) return { kind: "law", vote: (userId, number) => ballot.vote(userId, number) };
+  if (nameVote.isOpen) return { kind: "name", vote: (userId, number) => nameVote.vote(userId, number) };
+  return undefined;
+}
+
+function constitutionDocument() {
+  return buildConstitution({ beastName: profile.name, active: engine.activeLaws, history: engine.lawHistory });
+}
+
+function showInfoPanel(panel: InfoPanel, seconds: number): void {
+  infoPanel = { ...panel, until: Date.now() + seconds * 1000 };
+  broadcastSnapshot();
+}
+
+function startNameVote(): StartResult {
+  if (profile.name) return { ok: false, message: `The beast already has a name: ${profile.name}.` };
+  if (streamerControls.paused) return { ok: false, message: "The beast is paused. Naming is disabled until the broadcaster resumes it." };
+  if (engine.currentCrisis) return { ok: false, message: crisisProposalMessage };
+  if (voting.current) return { ok: false, message: "A vote is already active." };
+  if (anyBallotOpen()) return { ok: false, message: ballotBusyMessage };
+  const names = beastNameOptions(++nameSequence);
+  if (!nameVote.open(names)) return { ok: false, message: "Could not start a naming vote." };
+  pendingLaw = undefined;
+  pendingRepeal = undefined;
+  broadcastSound("vote_open");
+  logDecision("name_vote_opened", { vote_id: nameVote.current?.voteId, names: names.join("/") });
+  broadcastSnapshot();
+  return { ok: true };
+}
+
+function handleNameOutcome(outcome: NameVoteOutcome): void {
+  logDecision("name_vote_result", { vote_id: outcome.voteId, winner: outcome.winner ?? "none", votes: outcome.votes.join("/"), total: outcome.total });
+  if (outcome.winner && profile.setName(outcome.winner)) {
+    broadcastSound("law_passed");
+    showNotice(`The beast is named ${outcome.winner}.`);
+  } else {
+    showNotice("The naming vote closed with no votes.");
+  }
+  broadcastSnapshot();
+}
+
 function noteEventType(eventType: EventType): void {
   recentEventTypes.push(eventType);
   if (recentEventTypes.length > 12) recentEventTypes.splice(0, recentEventTypes.length - 12);
@@ -275,6 +333,22 @@ function noteEventType(eventType: EventType): void {
 async function handleTwitchChat(userId: string, userName: string, text: string, messageId: string): Promise<void> {
   const command = text.trim();
   const parsed = parseChatCommand(command);
+  if (parsed.kind === "constitution") {
+    logDecision("constitution_panel", { user: userName, user_id: userId, message_id: messageId });
+    showInfoPanel(constitutionPanel(constitutionDocument()), 9);
+    return;
+  }
+  if (parsed.kind === "tongue") {
+    logDecision("tongue_panel", { user: userName, user_id: userId, message_id: messageId });
+    showInfoPanel({ title: "THE BEAST'S TONGUE", rows: beastTongue }, 9);
+    return;
+  }
+  if (parsed.kind === "name_beast") {
+    const started = startNameVote();
+    logDecision("name_request", { user: userName, user_id: userId, started: started.ok, message_id: messageId });
+    if (!started.ok) showNotice(started.message);
+    return;
+  }
   if (parsed.kind === "laws") {
     lawsPanelUntil = Date.now() + 6000;
     logDecision("laws_panel", { user: userName, user_id: userId, message_id: messageId });
@@ -315,7 +389,7 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
       twitchRuntime?.sendChatReply(crisisProposalMessage);
       return;
     }
-    if (ballot.isOpen) {
+    if (anyBallotOpen()) {
       logDecision("law_proposal", { user: userName, user_id: userId, status: "rejected_ballot_open", compiler_path: "not_run", text: lawText, message_id: messageId });
       showNotice(ballotBusyMessage);
       return;
@@ -342,7 +416,7 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
       twitchRuntime?.sendChatReply(crisisProposalMessage);
       return;
     }
-    if (ballot.isOpen) {
+    if (anyBallotOpen()) {
       logDecision("law_proposal", { user: userName, user_id: userId, status: "rejected_ballot_opened_during_compile", compiler_path: compilerPath, text: lawText, message_id: messageId });
       showNotice(ballotBusyMessage);
       return;
@@ -373,9 +447,10 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
     }
     return;
   }
-  if (ballot.isOpen && (voteToken === "1" || voteToken === "2" || voteToken === "3")) {
-    const counted = ballot.vote(userId, Number(command));
-    logDecision("vote_cast", { kind: "ballot", user: userName, user_id: userId, choice: command, counted, message_id: messageId });
+  const openChoice = openChoiceVote();
+  if (openChoice && (voteToken === "1" || voteToken === "2" || voteToken === "3")) {
+    const counted = openChoice.vote(userId, Number(command));
+    logDecision("vote_cast", { kind: openChoice.kind === "name" ? "name" : "ballot", user: userName, user_id: userId, choice: command, counted, message_id: messageId });
     if (counted) {
       recordVote(userName, command as "1" | "2" | "3", false);
       broadcastSnapshot();
@@ -418,7 +493,7 @@ function handleTwitchEvent(name: Parameters<typeof translateTwitchEvent>[0], pay
   }
   if (name === "chat" && chatDetails) {
     const { userId, userName, message, messageId } = chatDetails;
-    if (/^!(?:law|laws|repeal)\b|^(?:1|2|3|yes|no)$/i.test(message.trim())) {
+    if (/^!(?:law|laws|repeal|constitution|tongue|name)\b|^(?:1|2|3|yes|no)$/i.test(message.trim())) {
       logDecision("chat_command_received", { user: userName, user_id: userId, message });
     }
     void handleTwitchChat(userId, userName, message, messageId);
@@ -457,6 +532,8 @@ function handleStreamerCommand(command: NonNullable<ReturnType<typeof parseStrea
     engine.clearAllLaws();
     voting.cancelCurrent();
     ballot.cancel();
+    nameVote.cancel();
+    profile.clear();
     crowdScheduledFor.clear();
     pendingLaw = undefined;
     pendingRepeal = undefined;
@@ -471,7 +548,7 @@ function handleStreamerCommand(command: NonNullable<ReturnType<typeof parseStrea
   const currentCrisis = engine.currentCrisis;
   const crisis = engine.cancelCrisis();
   const openBallotId = ballot.current?.ballotId;
-  const ballotCanceled = ballot.cancel();
+  const ballotCanceled = ballot.cancel() || nameVote.cancel();
   if (proposal) crowdScheduledFor.delete(proposal.proposalId);
   if (currentCrisis) crowdScheduledFor.delete(`crisis:${currentCrisis.proposed.id}`);
   if (openBallotId) crowdScheduledFor.delete(`ballot:${openBallotId}`);
@@ -491,6 +568,7 @@ sockets.on("connection", (socket) => {
 
 app.get("/", (_request, response) => response.sendFile(resolve("public/sandbox.html")));
 app.get("/api/state", (_request, response) => response.json(makeSnapshot()));
+app.get("/api/constitution", (_request, response) => response.json(constitutionDocument()));
 app.get("/api/twitch-status", (_request, response) => {
   response.json({ configured: twitchConfigured && (twitchRuntime !== undefined || twitchStatus.reconnecting), connected: twitchConnected, reconnecting: twitchStatus.reconnecting, reconnectAttempts: twitchStatus.reconnectAttempts });
 });
@@ -521,7 +599,7 @@ app.post("/api/sandbox/propose", async (request, response) => {
     response.status(409).json({ error: "The beast is paused. New laws are disabled until it resumes." });
     return;
   }
-  if (ballot.isOpen) {
+  if (anyBallotOpen()) {
     response.status(409).json({ error: ballotBusyMessage });
     return;
   }
@@ -574,6 +652,28 @@ app.post("/api/sandbox/crowd", (request, response) => {
   const crisis = engine.currentCrisis;
   const proposal = voting.current;
   const openBallotSnapshot = ballot.current;
+  const openNameVote = nameVote.current;
+  if (openNameVote && !openBallotSnapshot && !crisis && !proposal) {
+    const nameKey = `name:${openNameVote.voteId}`;
+    if (crowdScheduledFor.has(nameKey)) {
+      response.status(409).json({ error: "The simulated crowd is already voting on this naming vote." });
+      return;
+    }
+    crowdScheduledFor.add(nameKey);
+    const windowMs = Math.max(0, openNameVote.endsAt - Date.now() - 350);
+    for (let index = 1; index <= 8; index += 1) {
+      const username = `sim_viewer_${index}`;
+      const pick = 1 + Math.floor(Math.random() * openNameVote.names.length);
+      setTimeout(() => {
+        if (nameVote.current?.voteId !== openNameVote.voteId) return;
+        if (!nameVote.vote(username, pick)) return;
+        recordVote(username, String(pick) as "1" | "2" | "3", false, true);
+        broadcastSnapshot();
+      }, Math.floor(Math.random() * windowMs));
+    }
+    response.json({ ok: true, message: "Eight SIM viewers will vote on the name at random times before it closes." });
+    return;
+  }
   if (openBallotSnapshot && !crisis && !proposal) {
     const ballotKey = `ballot:${openBallotSnapshot.ballotId}`;
     if (crowdScheduledFor.has(ballotKey)) {
@@ -699,7 +799,7 @@ app.post("/api/sandbox/ballot/vote", (request, response) => {
     response.status(400).json({ error: "Choose a viewer and option 1, 2 or 3." });
     return;
   }
-  if (!ballot.vote(viewerId, option)) {
+  if (!openChoiceVote()?.vote(viewerId, option)) {
     response.status(409).json({ error: "No open ballot, vote already used, or the ballot closed." });
     return;
   }
@@ -721,6 +821,26 @@ app.post("/api/sandbox/repeal", (request, response) => {
     return;
   }
   response.json({ ok: true, message: `Repeal vote for law-${lawNumber} started. Vote yes or no.` });
+});
+
+app.post("/api/sandbox/name/open", (_request, response) => {
+  const started = startNameVote();
+  if (!started.ok) {
+    response.status(409).json({ error: started.message });
+    return;
+  }
+  response.json({ ok: true, message: "Naming vote opened. Vote 1, 2 or 3 as a viewer." });
+});
+
+app.post("/api/sandbox/panel", (request, response) => {
+  const kind = request.body?.kind;
+  if (kind === "constitution") showInfoPanel(constitutionPanel(constitutionDocument()), 9);
+  else if (kind === "tongue") showInfoPanel({ title: "THE BEAST'S TONGUE", rows: beastTongue }, 9);
+  else {
+    response.status(400).json({ error: "Unknown panel." });
+    return;
+  }
+  response.json({ ok: true, message: "Showing the panel on the overlay for 9 seconds." });
 });
 
 app.post("/api/sandbox/laws", (_request, response) => {
@@ -771,6 +891,11 @@ setInterval(() => {
     handleBallotOutcome(ballotOutcome);
     return;
   }
+  const nameOutcome = nameVote.closeIfExpired();
+  if (nameOutcome) {
+    handleNameOutcome(nameOutcome);
+    return;
+  }
   if (shouldOpenBallot({
     now: Date.now(),
     nextAt: nextBallotAt,
@@ -778,7 +903,7 @@ setInterval(() => {
     voteActive: Boolean(voting.current),
     crisisActive: Boolean(engine.currentCrisis),
     paused: streamerControls.paused,
-    ballotOpen: ballot.isOpen || ballotOpening
+    ballotOpen: anyBallotOpen() || ballotOpening
   })) {
     void openBallot();
   }

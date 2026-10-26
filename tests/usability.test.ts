@@ -51,10 +51,10 @@ describe("usability payloads", () => {
   });
 
   it("uses fixed status-only refusal copy", () => {
-    expect(refusalForStatus("unsupported_trigger")).toBe("I only know: follow, sub, gift sub, cheer, raid, hype train, chat activity.");
-    expect(refusalForStatus("unsupported_effect")).toBe("Effects: shake, flash, confetti, roar, scene 1-3, dare 1-3.");
-    expect(refusalForStatus("unsupported_part")).toBe("Parts: horns, eyes, crown, spikes, armor, scales, wings, tail, shell, tentacles, claws, extra arms, flames, runes, lightning.");
-    expect(refusalForStatus("too_vague")).toBe("Say what triggers it and what the beast gets, e.g. when someone subs grow wings.");
-    expect(refusalForStatus("unsafe")).toBe("That one is not allowed.");
+    expect(refusalForStatus("unsupported_trigger")).toBe("The beast cannot hear that. It only understands: follow, sub, gift sub, cheer, raid, hype train, chat activity.");
+    expect(refusalForStatus("unsupported_effect")).toBe("The beast cannot do that. Its effects: shake, flash, confetti, roar, scene 1-3, dare 1-3.");
+    expect(refusalForStatus("unsupported_part")).toBe("The beast has no such body part. Its parts: horns, eyes, crown, spikes, armor, scales, wings, tail, shell, tentacles, claws, extra arms, flames, runes, lightning.");
+    expect(refusalForStatus("too_vague")).toBe("The beast does not understand. Say what triggers it and what it grows, e.g. when someone subs grow wings.");
+    expect(refusalForStatus("unsafe")).toBe("The beast refuses. That law is not allowed.");
   });
 });

@@ -46,6 +46,29 @@ export function describeRule(rule: Rule): string {
   return `${trigger(rule.trigger.threshold)}: grow ${color} ${part} + ${action}`;
 }
 
+const titleEpithets: Record<EventType, string> = {
+  "channel.follow": "Follower's",
+  "channel.subscribe": "Subscriber's",
+  "channel.subscription.gift": "Gifter's",
+  "channel.cheer": "Cheerer's",
+  "channel.raid": "Raider's",
+  "channel.chat.message": "Chatter's",
+  "channel.hype_train.begin": "Hype Train's"
+};
+
+function capitalize(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/** A canonical name for a law, built only from validated values: "Follower's Yellow Horns". */
+export function lawTitle(rule: Pick<Rule, "trigger" | "mutation">): string {
+  const epithet = titleEpithets[rule.trigger.event_type];
+  const part = partPhrases[rule.mutation.part_id];
+  const color = colorPhrases[rule.mutation.color];
+  if (!epithet || !part || !color) throw new Error("Rule contains an unmapped schema value.");
+  return `${epithet} ${capitalize(color)} ${part.split(" ").map(capitalize).join(" ")}`;
+}
+
 export function displayUsername(username: string): string {
   return username.replace(/[\p{Cc}\p{Cf}]/gu, "").trim().slice(0, 24) || "unknown";
 }
@@ -60,12 +83,13 @@ export interface DisplayLaw extends Rule {
 }
 
 /** Project a persisted law into a client-safe representation with no raw proposal text. */
-export function lawForDisplay<T extends DisplayLaw>(law: T): Omit<T, "raw_text"> & { description: string; proposer_name?: string } {
+export function lawForDisplay<T extends DisplayLaw>(law: T): Omit<T, "raw_text"> & { description: string; title: string; proposer_name?: string } {
   const { raw_text, proposer_name, ...safe } = law;
   void raw_text;
   return {
     ...safe,
     description: describeRule({ status: law.status, trigger: law.trigger, action: law.action, mutation: law.mutation }),
+    title: lawTitle(law),
     ...(proposer_name ? { proposer_name: displayUsername(proposer_name) } : {})
-  } as Omit<T, "raw_text"> & { description: string; proposer_name?: string };
+  } as Omit<T, "raw_text"> & { description: string; title: string; proposer_name?: string };
 }

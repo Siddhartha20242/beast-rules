@@ -24,6 +24,18 @@
     #tier-brows.show, #tier-glint.show { opacity:1; }
     #tier-brows { fill:none; stroke:#202943; stroke-width:4; stroke-linecap:round; }
     #tier-glint { fill:#fff4a8; stroke:#202943; stroke-width:2; filter:drop-shadow(0 0 5px #fff2a0); }
+    #temperament-label { fill:#e9ecff; stroke:#202943; stroke-width:2; paint-order:stroke; font:600 6.5px Inter,system-ui,sans-serif; text-anchor:middle; letter-spacing:.2px; }
+    .scar { fill:none; stroke:#0f1226; stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round; opacity:.55; }
+    .scar-hi { fill:none; stroke:#fff; stroke-width:1; stroke-linecap:round; stroke-linejoin:round; opacity:.2; }
+    #beast-wrap.mood-fierce .body-idle { animation-duration: 2.6s; }
+    #beast-wrap.mood-calm .body-idle { animation-duration: 6.4s; }
+    #beast-wrap.mood-chaotic .body-idle { animation: breathe 3.4s ease-in-out infinite, mood-twitch 2.7s steps(1, end) infinite; }
+    @keyframes mood-twitch { 0%, 88%, 100% { translate: 0 0; } 90% { translate: 3px -2px; } 94% { translate: -3px 2px; } 97% { translate: 2px 1px; } }
+    #info-panel { display: none; position: absolute; z-index: 6; left: 50%; bottom: 176px; transform: translateX(-50%); width: min(660px, calc(100vw - 24px)); max-height: 34vh; overflow: hidden; padding: 8px 12px; }
+    #info-panel.show { display: block; }
+    #info-panel-title { color: #ffe37b; font-size: 13px; font-weight: 900; letter-spacing: .1em; margin-bottom: 6px; }
+    .info-panel-row { margin-top: 3px; padding: 3px 9px; border-radius: 9px; background: #262d4a; font-size: 11.5px; font-weight: 600; color: #eef0ff; line-height: 1.3; }
+    .laws-panel-title { color: #ffe37b; font-weight: 900; margin-right: 6px; }
     #tier-label { fill:#fff; stroke:#202943; stroke-width:2; paint-order:stroke; font:700 8px Inter,system-ui,sans-serif; text-anchor:middle; letter-spacing:.15px; }
     .part { opacity: 0; transition: opacity .45s ease; }
     .part.active { opacity: 1; }
@@ -229,7 +241,9 @@
         <ellipse id="roar-mouth" cx="250" cy="216" rx="32" ry="6"/>
         <path id="roar-tongue" d="M232 220Q250 236 268 220Q264 239 250 239Q236 239 232 220Z"/>
         <path d="M232 199Q250 212 268 199" fill="none" stroke="#202943" stroke-width="6" stroke-linecap="round"/>
+        <g id="scars" pointer-events="none"></g>
         <text id="tier-label" x="250" y="433">Tier 1 - Hatchling</text>
+        <text id="temperament-label" x="250" y="446">Unformed</text>
       </svg>
     </div>
   </div>
@@ -242,9 +256,13 @@
     <div id="laws-panel-title">ACTIVE LAWS · !repeal &lt;number&gt; to propose removing one</div>
     <div id="laws-panel-list"></div>
   </section>
+  <section id="info-panel" class="panel" aria-live="polite">
+    <div id="info-panel-title"></div>
+    <div id="info-panel-list"></div>
+  </section>
   <section id="hud">
     <div id="ballot" class="panel" aria-live="polite">
-      <div id="ballot-title"><span>BALLOT · type 1, 2 or 3</span><span id="ballot-time"></span></div>
+      <div id="ballot-title"><span id="ballot-title-text">BALLOT · type 1, 2 or 3</span><span id="ballot-time"></span></div>
       <div id="ballot-options"></div>
     </div>
     <div id="vote" class="panel">
@@ -426,7 +444,7 @@
       const wrap = document.getElementById("beast-wrap");
       wrap.style.setProperty("--evolution-scale", String(scales[tier]));
       wrap.style.filter = `drop-shadow(0 18px 18px #080b1c44) drop-shadow(0 0 ${5 + tier * 2}px ${glow}55)`;
-      document.getElementById("tier-label").textContent = `Tier ${tier} - ${names[tier]}`;
+      document.getElementById("tier-label").textContent = `${state.beast_name ? `${state.beast_name} · ` : ""}Tier ${tier} - ${names[tier]}`;
       document.getElementById("tier-brows").classList.toggle("show", tier >= 3);
       document.getElementById("tier-glint").classList.toggle("show", tier >= 5);
       if (lastEvolutionTier !== undefined && tier > lastEvolutionTier) {
@@ -641,7 +659,7 @@
         proposer.className = "law-proposer";
         const proposerName = typeof law.proposer_name === "string" && law.proposer_name !== "unknown" ? law.proposer_name : "";
         if (proposerName) proposer.textContent = ` by ${proposerName}`;
-        item.append(id, document.createTextNode(law.description));
+        item.append(id, document.createTextNode(law.title || law.description));
         if (proposerName) item.append(proposer);
         item.append(compilerTag);
         laws.append(item);
@@ -674,6 +692,8 @@
 
       renderBallot(state.ballot);
       renderLawsPanel(state);
+      renderInfoPanel(state);
+      updateCharacter(state);
 
       const proposal = state.proposal;
       const vote = document.getElementById("vote");
@@ -704,6 +724,7 @@
       const card = document.getElementById("ballot");
       card.classList.toggle("show", Boolean(ballot));
       if (!ballot) { clearInterval(ballotTimer); return; }
+      document.getElementById("ballot-title-text").textContent = ballot.kind === "name" ? "NAME THE BEAST · type 1, 2 or 3" : "BALLOT · type 1, 2 or 3";
       const list = document.getElementById("ballot-options");
       list.replaceChildren();
       const total = Math.max(1, ballot.total);
@@ -731,6 +752,63 @@
       ballotTimer = setInterval(tick, 500);
     }
 
+    // Scars: every law a zone has lost leaves a crack on the beast (up to three per zone).
+    const scarAnchors = {
+      head: [[232, 112], [270, 118], [250, 98]],
+      torso: [[225, 300], [275, 312], [250, 338]],
+      back: [[205, 205], [295, 205], [250, 190]],
+      limbs: [[190, 382], [310, 382], [250, 398]],
+      aura: [[96, 150], [404, 150], [250, 62]]
+    };
+    function crackPath(x, y, flip) {
+      const dx = flip ? -1 : 1;
+      return `M${x} ${y}l${9 * dx} 12l${-6 * dx} 7l${10 * dx} 13`;
+    }
+    function updateCharacter(state) {
+      const wrap = document.getElementById("beast-wrap");
+      const temperament = state.temperament || { mood: "unformed", label: "Unformed" };
+      for (const mood of ["fierce", "calm", "chaotic"]) wrap.classList.toggle(`mood-${mood}`, temperament.mood === mood);
+      document.getElementById("temperament-label").textContent = temperament.label;
+      const group = document.getElementById("scars");
+      group.replaceChildren();
+      const svgNs = "http://www.w3.org/2000/svg";
+      for (const [zone, rawCount] of Object.entries(state.scars || {})) {
+        const anchors = scarAnchors[zone] || [];
+        const count = Math.min(3, Number(rawCount) || 0);
+        for (let index = 0; index < count && index < anchors.length; index += 1) {
+          const [x, y] = anchors[index];
+          const flip = index % 2 === 1;
+          const dark = document.createElementNS(svgNs, "path");
+          dark.setAttribute("class", "scar");
+          dark.setAttribute("d", crackPath(x, y, flip));
+          const light = document.createElementNS(svgNs, "path");
+          light.setAttribute("class", "scar-hi");
+          light.setAttribute("d", crackPath(x + 1.5, y + 1.5, flip));
+          group.append(dark, light);
+        }
+      }
+    }
+
+    let infoPanelTimer;
+    function renderInfoPanel(state) {
+      const panel = document.getElementById("info-panel");
+      const info = state.info_panel;
+      const visible = Boolean(info) && Number(info.until) > Date.now();
+      panel.classList.toggle("show", visible);
+      clearTimeout(infoPanelTimer);
+      if (!visible) return;
+      document.getElementById("info-panel-title").textContent = info.title;
+      const list = document.getElementById("info-panel-list");
+      list.replaceChildren();
+      for (const text of info.rows || []) {
+        const row = document.createElement("div");
+        row.className = "info-panel-row";
+        row.textContent = text;
+        list.append(row);
+      }
+      infoPanelTimer = setTimeout(() => panel.classList.remove("show"), Math.max(0, Number(info.until) - Date.now()));
+    }
+
     let lawsPanelTimer;
     function renderLawsPanel(state) {
       const panel = document.getElementById("laws-panel");
@@ -753,7 +831,10 @@
         row.className = "laws-panel-row";
         const id = document.createElement("b");
         id.textContent = law.id;
-        row.append(id, document.createTextNode(law.description));
+        const lawName = document.createElement("span");
+        lawName.className = "laws-panel-title";
+        lawName.textContent = law.title ? `${law.title} —` : "";
+        row.append(id, lawName, document.createTextNode(law.description));
         list.append(row);
       }
       lawsPanelTimer = setTimeout(() => panel.classList.remove("show"), Math.max(0, until - Date.now()));
