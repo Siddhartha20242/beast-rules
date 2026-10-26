@@ -1,5 +1,5 @@
 import type { Color, PartId, Rule } from "./compiler/types.js";
-import { describeRule, displayUsername } from "./describe.js";
+import { describeRule, displayUsername, lawTitle } from "./describe.js";
 import type { Zone } from "./schema.js";
 
 export type LawBannerEvent = "passed" | "crisis_resolved";
@@ -10,6 +10,9 @@ export interface LawBannerPayload {
   event: LawBannerEvent;
   headline: string;
   law_id: string;
+  article?: number;
+  law_title: string;
+  vote_summary?: string;
   law_text: string;
   part_id: PartId;
   color: Color;
@@ -33,6 +36,8 @@ export function createLawBannerPayload(
     now?: number;
     durationMs?: number;
     headline?: string;
+    /** Short result line shown with the law, e.g. "passed 7-2". */
+    voteSummary?: string;
     relatedLaw?: LawBannerLaw;
     relatedLawRelation?: RelatedLawRelation;
   } = {}
@@ -43,6 +48,9 @@ export function createLawBannerPayload(
     event,
     headline: options.headline ?? (event === "passed" ? "LAW PASSED" : "CRISIS RESOLVED"),
     law_id: law.id,
+    ...(Number.isInteger(Number(law.id.replace(/^law-/, ""))) ? { article: Number(law.id.replace(/^law-/, "")) } : {}),
+    law_title: lawTitle(law),
+    ...(options.voteSummary ? { vote_summary: options.voteSummary } : {}),
     law_text: describeRule({ status: law.status, trigger: law.trigger, action: law.action, mutation: law.mutation }),
     part_id: law.mutation.part_id,
     color: law.mutation.color,

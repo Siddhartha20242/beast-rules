@@ -1,0 +1,292 @@
+[
+ {
+  "text": "When a viewer follows, sprout a purple crown",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.follow",
+   "threshold": 1,
+   "action": "confetti",
+   "part_id": "crown",
+   "color": "purple"
+  }
+ },
+ {
+  "text": "Gifted subs should give the beast pink wings and make it roar",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.subscription.gift",
+   "threshold": 1,
+   "action": "beast_roar",
+   "part_id": "wings",
+   "color": "pink"
+  }
+ },
+ {
+  "text": "Every 3 raids the beast grows orange tentacles",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.raid",
+   "threshold": 3,
+   "action": "confetti",
+   "part_id": "tentacles",
+   "color": "orange"
+  }
+ },
+ {
+  "text": "If someone cheers, flash the screen and add red spikes",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.cheer",
+   "threshold": 1,
+   "action": "screen_flash",
+   "part_id": "spikes",
+   "color": "red"
+  }
+ },
+ {
+  "text": "On hype train start: lightning, cyan, and shake the screen",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.hype_train.begin",
+   "threshold": 1,
+   "action": "screen_shake",
+   "part_id": "lightning",
+   "color": "cyan"
+  }
+ },
+ {
+  "text": "Whenever chat goes past 40 messages per minute, the beast gets green armor",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.chat.message",
+   "threshold": 40,
+   "action": "confetti",
+   "part_id": "armor",
+   "color": "green"
+  }
+ },
+ {
+  "text": "New subscriber? Give the beast a blue tail.",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.subscribe",
+   "threshold": 1,
+   "action": "confetti",
+   "part_id": "tail",
+   "color": "blue"
+  }
+ },
+ {
+  "text": "five cheers = yellow flames plus confetti",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.cheer",
+   "threshold": 5,
+   "action": "confetti",
+   "part_id": "flames",
+   "color": "yellow"
+  }
+ },
+ {
+  "text": "Let every follower add a pink shell",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.follow",
+   "threshold": 1,
+   "action": "confetti",
+   "part_id": "shell",
+   "color": "pink"
+  }
+ },
+ {
+  "text": "When there's a raid: roar loudly and grow purple claws",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.raid",
+   "threshold": 1,
+   "action": "beast_roar",
+   "part_id": "claws",
+   "color": "purple"
+  }
+ },
+ {
+  "text": "gift subs -> extra arms, orange",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.subscription.gift",
+   "threshold": 1,
+   "action": "confetti",
+   "part_id": "extra_arms",
+   "color": "orange"
+  }
+ },
+ {
+  "text": "Switch to scene 2 whenever someone subs, and grow cyan runes",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.subscribe",
+   "threshold": 1,
+   "action": "obs_scene_2",
+   "part_id": "runes",
+   "color": "cyan"
+  }
+ },
+ {
+  "text": "When chat is spamming 25 messages a minute, trigger dare 2 and add a red crown",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.chat.message",
+   "threshold": 25,
+   "action": "dare_2",
+   "part_id": "crown",
+   "color": "red"
+  }
+ },
+ {
+  "text": "On a follow the screen should flash and the beast gets green eyes",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.follow",
+   "threshold": 1,
+   "action": "screen_flash",
+   "part_id": "eyes",
+   "color": "green"
+  }
+ },
+ {
+  "text": "A cheer gives it blue horns",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.cheer",
+   "threshold": 1,
+   "action": "confetti",
+   "part_id": "horns",
+   "color": "blue"
+  }
+ },
+ {
+  "text": "Ten raids in, give it golden scales",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.raid",
+   "threshold": 10,
+   "action": "confetti",
+   "part_id": "scales",
+   "color": "yellow"
+  }
+ },
+ {
+  "text": "when a hype train begins, confetti, then grow pink lightning",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.hype_train.begin",
+   "threshold": 1,
+   "action": "confetti",
+   "part_id": "lightning",
+   "color": "pink"
+  }
+ },
+ {
+  "text": "Each subscription makes the beast roar and sprout orange wings",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.subscribe",
+   "threshold": 1,
+   "action": "beast_roar",
+   "part_id": "wings",
+   "color": "orange"
+  }
+ },
+ {
+  "text": "Whoever follows gets the beast a purple tail and a screen shake",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.follow",
+   "threshold": 1,
+   "action": "screen_shake",
+   "part_id": "tail",
+   "color": "purple"
+  }
+ },
+ {
+  "text": "If chat hits 15 messages a minute give it cyan armor",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.chat.message",
+   "threshold": 15,
+   "action": "confetti",
+   "part_id": "armor",
+   "color": "cyan"
+  }
+ },
+ {
+  "text": "Gifted sub: trigger dare 3, red tentacles",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.subscription.gift",
+   "threshold": 1,
+   "action": "dare_3",
+   "part_id": "tentacles",
+   "color": "red"
+  }
+ },
+ {
+  "text": "On every raid, flash the screen; the beast grows green flames",
+  "expect": {
+   "status": "ok",
+   "event_type": "channel.raid",
+   "threshold": 1,
+   "action": "screen_flash",
+   "part_id": "flames",
+   "color": "green"
+  }
+ },
+ {
+  "text": "When someone donates, grow wings",
+  "expect": {
+   "status": "unsupported_trigger"
+  }
+ },
+ {
+  "text": "Make the beast moonwalk when someone follows",
+  "expect": {
+   "status": "unsupported_effect"
+  }
+ },
+ {
+  "text": "On a raid grow a jetpack",
+  "expect": {
+   "status": "unsupported_part"
+  }
+ },
+ {
+  "text": "make everything awesome",
+  "expect": {
+   "status": "too_vague"
+  }
+ },
+ {
+  "text": "delete the chat history when someone cheers",
+  "expect": {
+   "status": "unsafe"
+  }
+ },
+ {
+  "text": "ban anyone who follows",
+  "expect": {
+   "status": "unsafe"
+  }
+ },
+ {
+  "text": "When the streamer wins a match, grow horns",
+  "expect": {
+   "status": "unsupported_trigger"
+  }
+ },
+ {
+  "text": "do something cool on subs",
+  "expect": {
+   "status": "too_vague"
+  }
+ }
+]

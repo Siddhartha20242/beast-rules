@@ -1,6 +1,6 @@
 import express from "express";
 import { createServer } from "node:http";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import OBSWebSocket from "obs-websocket-js";
 import { config } from "./config.js";
@@ -27,6 +27,7 @@ import { refusalForStatus, type RefusalStatus } from "./refusals.js";
 import { parseChatCommand } from "./chat-commands.js";
 import { BeastProfile, NameVote, beastNameOptions, nameVoteForSnapshot, type NameVoteOutcome } from "./beast-profile.js";
 import { computeTemperament } from "./temperament.js";
+import { computeDesire, satisfiesDesire } from "./desire.js";
 import { buildConstitution, constitutionPanel, scarsByZone, type InfoPanel } from "./constitution.js";
 import { beastTongue } from "./refusals.js";
 import { BallotManager, ballotForSnapshot, shouldOpenBallot, suggestLaws, type BallotOutcome } from "./ballot.js";
@@ -35,12 +36,12 @@ import type { EventType } from "./compiler/types.js";
 const app = express();
 const server = createServer(app);
 const sockets = new WebSocketServer({ server });
-const engine = new RuleEngine();
+const engine = new RuleEngine({ filePath: join(config.dataDir, "beast.json") });
 const templateCompiler = new TemplateCompiler();
 const ollamaCompiler = new OllamaCompiler();
 const autoCompiler = new AutoCompiler({ template: templateCompiler, ollama: ollamaCompiler });
 const voting = new VotingManager({ voteSeconds: config.voteSeconds });
-const streamerControls = new StreamerControlState();
+const streamerControls = new StreamerControlState(resolve(config.dataDir, "streamer-controls.json"));
 const obsClient = new OBSWebSocket();
 const obsSwitcher = new ObsSceneSwitcher({
   url: config.obsWsUrl,
@@ -66,7 +67,7 @@ let lawToasts: LawToast[] = [];
 const lawHints = loadContractExamples();
 const crowdScheduledFor = new Set<string>();
 const ballot = new BallotManager({ ballotSeconds: config.ballotSeconds });
-const profile = new BeastProfile();
+const profile = new BeastProfile({ filePath: join(config.dataDir, "beast-profile.json") });
 const nameVote = new NameVote({ seconds: config.ballotSeconds });
 let nameSequence = 0;
 let infoPanel: (InfoPanel & { until: number }) | undefined;
@@ -125,6 +126,7 @@ function makeSnapshot() {
     ballot: ballotForSnapshot(ballot.current) ?? nameVoteForSnapshot(nameVote.current),
     beast_name: profile.name,
     temperament: computeTemperament(engine.activeLaws, engine.lawHistory.length),
+    desire: currentDesire(),
     scars: scarsByZone(engine.lawHistory),
     info_panel: infoPanel && infoPanel.until > Date.now() ? { title: infoPanel.title, rows: infoPanel.rows, until: infoPanel.until } : null,
     laws_panel_until: lawsPanelUntil > Date.now() ? lawsPanelUntil : 0
@@ -189,10 +191,12 @@ function showNotice(message: string): void {
 }
 
 // Enact a law that passed a vote or won a ballot. A law that wants an occupied zone starts a crisis vote instead.
-function enactLaw(pending: { rule: Rule; text: string; compilerPath: CompilerPath; proposerName: string }): void {
+function enactLaw(pending: { rule: Rule; text: string; compilerPath: CompilerPath; proposerName: string; voteSummary?: string }): void {
+  const desireBefore = currentDesire();
   const result = engine.beginCrisis(pending.rule, pending.text, config.crisisSeconds, pending.compilerPath, pending.proposerName);
   if (result.status === "added") {
-    lawBanner = createLawBannerPayload("passed", result.law);
+    lawBanner = createLawBannerPayload("passed", result.law, pending.voteSummary ? { voteSummary: pending.voteSummary } : {});
+    if (satisfiesDesire(desireBefore, result.law.trigger.event_type)) showNotice(`${profile.name ?? "The beast"} is pleased.`);
     console.info(`Compiler ${compilerLabel(pending.compilerPath)} handled ${result.law.id}`);
     logDecision("law_enacted", { id: result.law.id, zone: result.law.zone, part: result.law.mutation.part_id });
     triggerLawAction(result.law.action.type, true);
@@ -201,6 +205,7 @@ function enactLaw(pending: { rule: Rule; text: string; compilerPath: CompilerPat
     broadcastSound("crisis_start");
     lawBanner = createLawBannerPayload("passed", result.crisis.proposed, {
       headline: "LAW PASSED · CRISIS VOTE",
+      ...(pending.voteSummary ? { voteSummary: pending.voteSummary } : {}),
       relatedLaw: result.crisis.existing,
       relatedLawRelation: "challenged"
     });
@@ -254,7 +259,8 @@ function handleBallotOutcome(outcome: BallotOutcome): void {
   logDecision("ballot_result", { ballot_id: outcome.ballotId, winner: outcome.winner?.number ?? 0, votes: outcome.votes.join("/"), total: outcome.total });
   if (outcome.winner) {
     broadcastSound("law_passed");
-    enactLaw({ rule: outcome.winner.rule, text: outcome.winner.text, compilerPath: "parser", proposerName: "Ballot" });
+    const winnerVotes = outcome.votes[outcome.winner.number - 1] ?? 0;
+    enactLaw({ rule: outcome.winner.rule, text: outcome.winner.text, compilerPath: "parser", proposerName: "Ballot", voteSummary: `won the ballot ${winnerVotes} of ${outcome.total} votes` });
   } else {
     showNotice("The ballot closed with no votes.");
   }
@@ -289,8 +295,12 @@ function openChoiceVote(): { kind: "law" | "name"; vote: (userId: string, number
   return undefined;
 }
 
+function currentDesire() {
+  return computeDesire(engine.activeLaws.map((law) => law.trigger.event_type), computeTemperament(engine.activeLaws, engine.lawHistory.length).mood, profile.name);
+}
+
 function constitutionDocument() {
-  return buildConstitution({ beastName: profile.name, active: engine.activeLaws, history: engine.lawHistory });
+  return buildConstitution({ beastName: profile.name, active: engine.activeLaws, history: engine.lawHistory, temperamentLabel: computeTemperament(engine.activeLaws, engine.lawHistory.length).label });
 }
 
 function showInfoPanel(panel: InfoPanel, seconds: number): void {
@@ -607,6 +617,7 @@ app.post("/api/sandbox/propose", async (request, response) => {
   try {
     const { rule, path: compilerPath } = await compileLaw(text);
     if (rule.status !== "ok") {
+      showRefusal(rule.status);
       response.status(422).json({ error: `Proposal rejected: ${rule.status}` });
       return;
     }
@@ -868,6 +879,7 @@ setInterval(() => {
     const newLawWon = crisisOutcome.winner_choice === "proposed";
     lawBanner = createLawBannerPayload("crisis_resolved", crisisOutcome.winner, {
       headline: newLawWon ? "NEW LAW SURVIVES" : "EXISTING LAW SURVIVES",
+      voteSummary: `survived ${newLawWon ? crisisOutcome.proposed_votes : crisisOutcome.existing_votes}-${newLawWon ? crisisOutcome.existing_votes : crisisOutcome.proposed_votes}`,
       relatedLaw: crisisOutcome.loser,
       relatedLawRelation: "overruled"
     });
@@ -919,7 +931,7 @@ setInterval(() => {
       const removed = engine.repeal(target.lawId);
       if (removed) {
         broadcastSound("crisis_resolved");
-        lawBanner = createLawBannerPayload("crisis_resolved", removed, { headline: "LAW REPEALED" });
+        lawBanner = createLawBannerPayload("crisis_resolved", removed, { headline: "LAW REPEALED", voteSummary: `repealed ${outcome.yes}-${outcome.no}` });
         logDecision("law_repealed", { id: removed.id, zone: removed.zone, part: removed.mutation.part_id });
         showNotice(`${target.lawId} was repealed.`);
       } else {
@@ -932,7 +944,7 @@ setInterval(() => {
     return;
   }
   if (outcome.status === "passed") broadcastSound("law_passed");
-  if (outcome.status === "passed" && pendingLaw) enactLaw(pendingLaw);
+  if (outcome.status === "passed" && pendingLaw) enactLaw({ ...pendingLaw, voteSummary: `passed ${outcome.yes}-${outcome.no}` });
   pendingLaw = undefined;
   broadcastSnapshot();
   twitchRuntime?.sendChatReply(outcome.status === "passed" ? "The law passed." : "The law did not pass.");

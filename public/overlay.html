@@ -25,8 +25,12 @@
     #tier-brows { fill:none; stroke:#202943; stroke-width:4; stroke-linecap:round; }
     #tier-glint { fill:#fff4a8; stroke:#202943; stroke-width:2; filter:drop-shadow(0 0 5px #fff2a0); }
     #temperament-label { fill:#e9ecff; stroke:#202943; stroke-width:2; paint-order:stroke; font:600 6.5px Inter,system-ui,sans-serif; text-anchor:middle; letter-spacing:.2px; }
+    #desire-label { fill:#ffe9a8; stroke:#202943; stroke-width:2; paint-order:stroke; font:italic 600 6px Inter,system-ui,sans-serif; text-anchor:middle; letter-spacing:.15px; }
     .scar { fill:none; stroke:#0f1226; stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round; opacity:.55; }
+    .scar-new { stroke-dasharray: 70; stroke-dashoffset: 70; animation: crack-draw .55s ease-out forwards; stroke: #ff6b6b; opacity: .95; }
+    @keyframes crack-draw { to { stroke-dashoffset: 0; stroke: #0f1226; opacity: .55; } }
     .scar-hi { fill:none; stroke:#fff; stroke-width:1; stroke-linecap:round; stroke-linejoin:round; opacity:.2; }
+    #beast-wrap.scar-shake { animation: shake .6s ease-in-out; }
     #beast-wrap.mood-fierce .body-idle { animation-duration: 2.6s; }
     #beast-wrap.mood-calm .body-idle { animation-duration: 6.4s; }
     #beast-wrap.mood-chaotic .body-idle { animation: breathe 3.4s ease-in-out infinite, mood-twitch 2.7s steps(1, end) infinite; }
@@ -93,6 +97,7 @@
     .law-banner-active #beast-wrap, .vote-ticker-active #beast-wrap { width:min(72vh,72vw,840px); top:118px; }
     #sound-hint { display:none; position:absolute; z-index:8; right:12px; top:12px; padding:6px 9px; border:1px solid #ffd166; border-radius:8px; background:#171d33e8; color:#ffe7a8; font-size:10px; font-weight:800; cursor:pointer; }
     #sound-hint.show { display:block; }
+    .law-banner-active #notice, .vote-ticker-active #notice { top: 96px; }
     #notice { display:none; position:absolute; z-index:7; left:50%; top:18px; transform:translateX(-50%); padding:12px 18px; border:1px solid #ffcc66; border-radius:10px; background:#24190de8; color:#ffe5b4; font-weight:700; }
     #law-toasts { position:absolute; z-index:7; left:12px; top:14vh; display:grid; gap:8px; width:clamp(150px,25vw,310px); pointer-events:none; }
     .law-toast { min-width:0; padding:9px 11px; border:1px solid #ffd166aa; border-radius:12px; background:#171d33ed; box-shadow:0 6px 18px #05071388; animation:toast-in .2s ease-out; }
@@ -244,6 +249,7 @@
         <g id="scars" pointer-events="none"></g>
         <text id="tier-label" x="250" y="433">Tier 1 - Hatchling</text>
         <text id="temperament-label" x="250" y="446">Unformed</text>
+        <text id="desire-label" x="250" y="458"></text>
       </svg>
     </div>
   </div>
@@ -383,6 +389,11 @@
           [1047, 1319, 1568, 2093].forEach((frequency, index) => playTone(frequency, .2, { type: "sine", delay: index * .13, volume: .12 }));
           break;
         case "beast_roar": playTone(92, .9, { type: "sawtooth", endFrequency: 38, volume: .2 }); break;
+        case "scar_crack":
+          playTone(70, .42, { type: "sawtooth", endFrequency: 38, volume: .3 });
+          playTone(1900, .05, { type: "square", delay: .02, volume: .1 });
+          playTone(1300, .05, { type: "square", delay: .11, volume: .08 });
+          break;
         case "tier_up": [523, 659, 784].forEach((frequency, index) => playTone(frequency, .24, { type:"triangle", delay:index * .14, volume:.13 })); break;
       }
     }
@@ -601,7 +612,12 @@
       currentLawBannerId = banner.banner_id;
       document.getElementById("law-banner-headline").textContent = banner.headline;
       const credit = document.getElementById("law-banner-credit");
-      credit.textContent = banner.proposer_name && banner.proposer_name !== "unknown" ? `by ${banner.proposer_name}` : "";
+      const captionParts = [];
+      if (banner.article) captionParts.push(`Article ${banner.article}`);
+      if (banner.law_title) captionParts.push(banner.law_title);
+      if (banner.vote_summary) captionParts.push(banner.vote_summary);
+      if (banner.proposer_name && banner.proposer_name !== "unknown") captionParts.push(`sponsor ${banner.proposer_name}`);
+      credit.textContent = captionParts.join(" · ");
       credit.hidden = !credit.textContent;
       document.getElementById("law-banner-text").textContent = banner.law_text;
       document.getElementById("law-banner-part").textContent = `${banner.part_id.replaceAll("_", " ").toUpperCase()} (${banner.color}, ${banner.zone})`;
@@ -671,8 +687,8 @@
       crisisBanner.classList.toggle("show", Boolean(crisis));
       if (crisis) {
         const totalVotes = Math.max(1, crisis.existing_votes + crisis.proposed_votes);
-        document.getElementById("crisis-existing-text").textContent = crisis.existing.description;
-        document.getElementById("crisis-proposed-text").textContent = crisis.proposed.description;
+        document.getElementById("crisis-existing-text").textContent = `${crisis.existing.title || crisis.existing.description}${crisis.existing.proposer_name ? ` — by ${crisis.existing.proposer_name}` : ""}`;
+        document.getElementById("crisis-proposed-text").textContent = `${crisis.proposed.title || crisis.proposed.description}${crisis.proposed.proposer_name ? ` — by ${crisis.proposed.proposer_name}` : ""}`;
         renderCrisisPartPreview("crisis-existing-preview", crisis.existing.mutation.part_id, crisis.existing.mutation.color);
         renderCrisisPartPreview("crisis-proposed-preview", crisis.proposed.mutation.part_id, crisis.proposed.mutation.color);
         document.getElementById("crisis-existing-count").textContent = `Votes: ${crisis.existing_votes} · Type 1`;
@@ -764,12 +780,21 @@
       const dx = flip ? -1 : 1;
       return `M${x} ${y}l${9 * dx} 12l${-6 * dx} 7l${10 * dx} 13`;
     }
+    let lastScarCounts;
     function updateCharacter(state) {
       const wrap = document.getElementById("beast-wrap");
       const temperament = state.temperament || { mood: "unformed", label: "Unformed" };
       for (const mood of ["fierce", "calm", "chaotic"]) wrap.classList.toggle(`mood-${mood}`, temperament.mood === mood);
       document.getElementById("temperament-label").textContent = temperament.label;
+      document.getElementById("desire-label").textContent = state.desire ? state.desire.text : "";
       const group = document.getElementById("scars");
+      const currentScars = state.scars || {};
+      const previousScars = lastScarCounts;
+      let scarAdded = false;
+      if (previousScars) {
+        for (const [zone, count] of Object.entries(currentScars)) if ((Number(count) || 0) > (previousScars[zone] || 0)) scarAdded = true;
+      }
+      lastScarCounts = { ...currentScars };
       group.replaceChildren();
       const svgNs = "http://www.w3.org/2000/svg";
       for (const [zone, rawCount] of Object.entries(state.scars || {})) {
@@ -784,8 +809,14 @@
           const light = document.createElementNS(svgNs, "path");
           light.setAttribute("class", "scar-hi");
           light.setAttribute("d", crackPath(x + 1.5, y + 1.5, flip));
+          if (scarAdded && index === count - 1 && (Number(rawCount) || 0) > ((previousScars && previousScars[zone]) || 0)) dark.classList.add("scar-new");
           group.append(dark, light);
         }
+      }
+      if (scarAdded) {
+        playCue("scar_crack");
+        wrap.classList.remove("scar-shake"); void wrap.offsetWidth; wrap.classList.add("scar-shake");
+        setTimeout(() => wrap.classList.remove("scar-shake"), 700);
       }
     }
 
@@ -861,7 +892,7 @@
         description.textContent = toast.description;
         const actor = document.createElement("div");
         actor.className = "law-toast-actor";
-        actor.textContent = toast.simulated ? "SIM" : `triggered by ${toast.triggered_by || "Twitch"}`;
+        actor.textContent = `${toast.simulated ? "SIM" : `triggered by ${toast.triggered_by || "Twitch"}`}${toast.sponsor ? ` · sponsor ${toast.sponsor}` : ""}`;
         card.append(heading, description, actor);
         container.append(card);
       }

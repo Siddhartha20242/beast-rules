@@ -12,7 +12,8 @@
     "eval": "node --import tsx scripts/eval.ts",
     "sandbox": "node --import tsx src/server.ts",
     "twitch:auth": "node --import tsx src/twitch/auth.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "demo": "node --import tsx scripts/demo.ts"
   },
   "dependencies": {
     "@twurple/api": "^8.2.0",

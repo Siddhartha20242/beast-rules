@@ -7,6 +7,7 @@ export interface LawToast {
   law_id: string;
   description: string;
   triggered_by?: string;
+  sponsor?: string;
   simulated: boolean;
   ends_at: number;
 }
@@ -17,6 +18,7 @@ export function createLawToast(law: ActiveLaw, actorName: string | undefined, si
     law_id: law.id,
     description: describeRule({ status: law.status, trigger: law.trigger, action: law.action, mutation: law.mutation }),
     ...(!simulated && actorName ? { triggered_by: displayUsername(actorName) } : {}),
+    ...(law.proposer_name && law.proposer_name !== "unknown" ? { sponsor: displayUsername(law.proposer_name) } : {}),
     simulated,
     ends_at: now + 3000
   };

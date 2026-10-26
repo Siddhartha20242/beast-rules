@@ -18,7 +18,18 @@ export interface Article {
   note?: string;
 }
 
+export interface ConstitutionCover {
+  beast_name: string | null;
+  temperament: string | null;
+  ratified_at: string | null;
+  /** Share of every law ever written that is still in force, 0-100. Null before the first law. */
+  integrity_percent: number | null;
+  laws_written: number;
+  laws_in_force: number;
+}
+
 export interface ConstitutionDocument {
+  cover: ConstitutionCover;
   title: string;
   preamble: string;
   beast_name: string | null;
@@ -62,12 +73,23 @@ export function scarsByZone(history: readonly Pick<HistoricalLaw, "zone">[]): Pa
   return scars;
 }
 
-export function buildConstitution(input: { beastName: string | null; active: readonly ActiveLaw[]; history: readonly HistoricalLaw[] }): ConstitutionDocument {
+export function buildConstitution(input: { beastName: string | null; active: readonly ActiveLaw[]; history: readonly HistoricalLaw[]; temperamentLabel?: string | null }): ConstitutionDocument {
   const articles: Article[] = [
     ...input.active.map((law, index) => toArticle(law, index, "active")),
     ...input.history.map((law, index) => toArticle(law, input.active.length + index, law.overruled_by === "repealed" ? "repealed" : "overruled", law))
   ].sort((a, b) => a.number - b.number);
+  const written = articles.length;
+  const inForce = articles.filter((article) => article.status === "active").length;
+  const firstEnacted = written ? articles.map((article) => Date.parse(article.enacted_at)).sort((a, b) => a - b)[0]! : undefined;
   return {
+    cover: {
+      beast_name: input.beastName,
+      temperament: input.temperamentLabel ?? null,
+      ratified_at: firstEnacted === undefined ? null : new Date(firstEnacted).toISOString(),
+      integrity_percent: written ? Math.round((inForce / written) * 100) : null,
+      laws_written: written,
+      laws_in_force: inForce
+    },
     title: `Constitution of ${input.beastName ?? "the Beast"}`,
     preamble,
     beast_name: input.beastName,

@@ -16,6 +16,7 @@ const compilerValue = process.env.COMPILER;
 
 export const config = {
   port: positiveInteger(process.env.PORT, 3000),
+  dataDir: process.env.DATA_DIR || "data",
   voteSeconds: positiveInteger(process.env.VOTE_SECONDS, 30),
   crisisSeconds: positiveInteger(process.env.CRISIS_SECONDS, 20),
   ballotMinutes: nonNegativeInteger(process.env.BALLOT_MINUTES, 5),
