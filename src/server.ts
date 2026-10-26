@@ -24,6 +24,7 @@ import { describeRule, displayUsername, lawForDisplay } from "./describe.js";
 import { createLawToast, lawToastsForSnapshot, pushLawToast, type LawToast } from "./law-toast.js";
 import { loadContractExamples } from "./law-hints.js";
 import { refusalForStatus, type RefusalStatus } from "./refusals.js";
+import { parseChatCommand } from "./chat-commands.js";
 import { BallotManager, ballotForSnapshot, shouldOpenBallot, suggestLaws, type BallotOutcome } from "./ballot.js";
 import type { EventType } from "./compiler/types.js";
 
@@ -273,38 +274,35 @@ function noteEventType(eventType: EventType): void {
 
 async function handleTwitchChat(userId: string, userName: string, text: string, messageId: string): Promise<void> {
   const command = text.trim();
-  if (/^!laws$/i.test(command)) {
+  const parsed = parseChatCommand(command);
+  if (parsed.kind === "laws") {
     lawsPanelUntil = Date.now() + 6000;
     logDecision("laws_panel", { user: userName, user_id: userId, message_id: messageId });
     broadcastSnapshot();
     return;
   }
-  const repeal = command.match(/^!repeal\s+(?:law-)?(\d{1,4})\s*$/i);
-  if (repeal) {
-    const started = startRepeal(userId, userName, Number(repeal[1]));
-    logDecision("repeal_request", { user: userName, user_id: userId, law_number: Number(repeal[1]), started: started.ok, message_id: messageId });
+  if (parsed.kind === "repeal") {
+    const started = startRepeal(userId, userName, parsed.lawNumber);
+    logDecision("repeal_request", { user: userName, user_id: userId, law_number: parsed.lawNumber, started: started.ok, message_id: messageId });
     if (!started.ok) {
       showNotice(started.message);
       twitchRuntime?.sendChatReply(started.message);
     }
     return;
   }
-  if (/^!law$/i.test(command)) {
+  if (parsed.kind === "law_missing") {
     logDecision("law_proposal", { user: userName, user_id: userId, status: "missing_law_text", message_id: messageId });
     showRefusal("too_vague");
     return;
   }
-  const highlight = command.match(/^!law\s+(\d+)\s*$/i);
-  if (highlight) {
-    const law = engine.activeLaws.find((item) => item.id === `law-${Number(highlight[1])}`);
-    logDecision("law_highlight", { user: userName, user_id: userId, law_number: Number(highlight[1]), found: Boolean(law), message_id: messageId });
+  if (parsed.kind === "law_highlight") {
+    const law = engine.activeLaws.find((item) => item.id === `law-${parsed.lawNumber}`);
+    logDecision("law_highlight", { user: userName, user_id: userId, law_number: parsed.lawNumber, found: Boolean(law), message_id: messageId });
     if (law) broadcastMessage({ type: "highlight", lawId: law.id });
     return;
   }
-  const proposal = command.match(/^!law\s+(.+)$/i);
-  if (proposal) {
-    const lawText = proposal[1]!.trim();
-    if (!lawText) return;
+  if (parsed.kind === "law_propose") {
+    const lawText = parsed.text;
     if (streamerControls.paused) {
       logDecision("law_proposal", { user: userName, user_id: userId, status: "rejected_paused", compiler_path: "not_run", text: lawText, message_id: messageId });
       showNotice("The beast is paused. New laws are disabled until the broadcaster resumes it.");
@@ -365,7 +363,8 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
     twitchRuntime?.sendChatReply("Law proposed. Vote yes or no in chat.");
     return;
   }
-  if (engine.currentCrisis && /^(1|2)$/.test(command)) {
+  const voteToken = parsed.kind === "vote_token" ? parsed.token : undefined;
+  if (engine.currentCrisis && (voteToken === "1" || voteToken === "2")) {
     const counted = engine.castCrisisVote(userId, command === "1" ? "existing" : "proposed");
     logDecision("vote_cast", { kind: "crisis", user: userName, user_id: userId, choice: command, counted, message_id: messageId });
     if (counted) {
@@ -374,7 +373,7 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
     }
     return;
   }
-  if (ballot.isOpen && /^[123]$/.test(command)) {
+  if (ballot.isOpen && (voteToken === "1" || voteToken === "2" || voteToken === "3")) {
     const counted = ballot.vote(userId, Number(command));
     logDecision("vote_cast", { kind: "ballot", user: userName, user_id: userId, choice: command, counted, message_id: messageId });
     if (counted) {
@@ -383,7 +382,7 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
     }
     return;
   }
-  const choice: VoteChoice | undefined = /^(1|yes)$/i.test(command) ? "yes" : /^(2|no)$/i.test(command) ? "no" : undefined;
+  const choice: VoteChoice | undefined = voteToken === "1" || voteToken === "yes" ? "yes" : voteToken === "2" || voteToken === "no" ? "no" : undefined;
   if (choice) {
     const counted = voting.current ? voting.castVote(userId, choice) : false;
     logDecision("vote_cast", { kind: "proposal", user: userName, user_id: userId, choice, counted, message_id: messageId });

@@ -84,7 +84,7 @@ These small, fixed sets are not a measure of general language understanding, and
 
 ## How Codex built this
 
-This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **224 tests across 17 files**. Codex ran out of free credits near the end, so two late changes were written with a different AI assistant instead and are labelled that way in the log: the network-resilience fix, and the ballot plus repeal features. The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
+This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **237 tests across 18 files**. Codex ran out of free credits near the end, so two late changes were written with a different AI assistant instead and are labelled that way in the log: the network-resilience fix, and the ballot plus repeal features. The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
 
 Three examples of problems found and resolved: [the parser initially emitted `eventType` instead of schema-required `event_type`](docs/CODEX_LOG.md#roadmap-step-2--templatecompiler-only); [npm's shared cache rejected writes, so installation was retried with a temporary cache](docs/CODEX_LOG.md#streamer-controls-and-obs-scene-switching); and [the preview initially missed its first frame, so it was rerun from the start and all 15 parts were verified](docs/CODEX_LOG.md#sandbox-crowd-bias-reliable-part-preview-and-legacy-proposer-labels). **No runtime model call goes through Codex:** law compilation uses the local parser and, when configured, a local Ollama server.
 
@@ -122,4 +122,5 @@ Verified by 14 unit tests (including the exact error shape from the crash) and a
 - Ollama must be running locally for model rescue, and rescue results vary. Ollama is optional; the parser remains available without it.
 - Twitch requires a developer app, broadcaster authorization, and the listed scopes. Follow testing needs another account.
 - OBS scene actions require a configured, reachable OBS WebSocket server and mapped scene names; only mock behavior has been verified.
-- Screenshot, GIF, demo-video, and Devpost links above are placeholders, not implemented artifacts.
+- Chat commands (`!law`, `!laws`, `!repeal`, votes) are covered by unit tests of the command parser and the engine; the `!law` + vote path has also been exercised with real Twitch chat. Real-chat checks of `!laws`, `!repeal` and `!beast` controls, and a real follow event, were not done when this was written.
+- Sound cues were verified to build and stay under two seconds with a recording audio stub; how they sound was not verified in a listening test.
