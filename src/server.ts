@@ -20,6 +20,7 @@ let pendingLaw: { id: string; text: string; proposerId: string; rule: Awaited<Re
 let lastConflict: ReturnType<RuleEngine["add"]>["conflict"];
 let twitchRuntime: TwitchRuntime | undefined;
 let proposalSequence = 0;
+const crisisProposalMessage = "A constitutional crisis is underway. Wait for it to resolve before proposing another law.";
 
 app.use(express.json({ limit: "8kb" }));
 app.use(express.static(resolve("public")));
@@ -43,6 +44,7 @@ function makeSnapshot() {
       no: current.no,
       total: current.voters
     } : null,
+    crisis: engine.currentCrisis ?? null,
     conflict: lastConflict ?? null
   };
 }
@@ -94,6 +96,11 @@ async function handleTwitchChat(userId: string, text: string, messageId: string)
   if (proposal) {
     const lawText = proposal[1]!.trim();
     if (!lawText) return;
+    if (engine.currentCrisis) {
+      showNotice(crisisProposalMessage);
+      twitchRuntime?.sendChatReply(crisisProposalMessage);
+      return;
+    }
     let rule: Awaited<ReturnType<TemplateCompiler["compile"]>>;
     try {
       rule = await compiler.compile(lawText);
@@ -107,6 +114,11 @@ async function handleTwitchChat(userId: string, text: string, messageId: string)
       return;
     }
     const proposalId = `twitch-proposal-${Date.now()}-${++proposalSequence}`;
+    if (engine.currentCrisis) {
+      showNotice(crisisProposalMessage);
+      twitchRuntime?.sendChatReply(crisisProposalMessage);
+      return;
+    }
     if (!voting.startProposal(proposalId, userId)) {
       const message = "A vote is active or this viewer is on proposal cooldown.";
       showNotice(message);
@@ -117,6 +129,11 @@ async function handleTwitchChat(userId: string, text: string, messageId: string)
     lastConflict = undefined;
     broadcastSnapshot();
     twitchRuntime?.sendChatReply("Law proposed. Vote yes or no in chat.");
+    return;
+  }
+  if (engine.currentCrisis && /^(1|2)$/.test(command)) {
+    const counted = engine.castCrisisVote(userId, command === "1" ? "existing" : "proposed");
+    if (counted) broadcastSnapshot();
     return;
   }
   const choice: VoteChoice | undefined = /^(1|yes)$/i.test(command) ? "yes" : /^(2|no)$/i.test(command) ? "no" : undefined;
@@ -157,11 +174,19 @@ app.post("/api/sandbox/propose", async (request, response) => {
     response.status(400).json({ error: "Choose viewer_1 to viewer_5 and enter a law." });
     return;
   }
+  if (engine.currentCrisis) {
+    response.status(409).json({ error: crisisProposalMessage });
+    return;
+  }
 
   try {
     const rule = await compiler.compile(text);
     if (rule.status !== "ok") {
       response.status(422).json({ error: `Proposal rejected: ${rule.status}` });
+      return;
+    }
+    if (engine.currentCrisis) {
+      response.status(409).json({ error: crisisProposalMessage });
       return;
     }
     const proposalId = `proposal-${Date.now()}`;
@@ -187,6 +212,21 @@ app.post("/api/sandbox/vote", (request, response) => {
   }
   if (!voting.castVote(viewerId, choice)) {
     response.status(409).json({ error: "No active vote, vote already used, or vote window closed." });
+    return;
+  }
+  broadcastSnapshot();
+  response.json({ ok: true });
+});
+
+app.post("/api/sandbox/crisis-vote", (request, response) => {
+  const viewerId = typeof request.body?.viewerId === "string" ? request.body.viewerId : "";
+  const choice = request.body?.choice;
+  if (!/^viewer_[1-5]$/.test(viewerId) || (choice !== "existing" && choice !== "proposed")) {
+    response.status(400).json({ error: "Choose a viewer and vote 1 or 2." });
+    return;
+  }
+  if (!engine.castCrisisVote(viewerId, choice)) {
+    response.status(409).json({ error: "Your crisis vote could not be counted." });
     return;
   }
   broadcastSnapshot();
@@ -228,12 +268,20 @@ app.post("/api/sandbox/event", (request, response) => {
 });
 
 setInterval(() => {
+  const crisisOutcome = engine.resolveCrisisIfExpired();
+  if (crisisOutcome) {
+    const newLawWon = crisisOutcome.winner_choice === "proposed";
+    if (newLawWon) broadcastEffect(crisisOutcome.winner.action.type, true);
+    showNotice(newLawWon ? "The new law survives the constitutional crisis." : "The existing law survives the constitutional crisis.");
+    broadcastSnapshot();
+    return;
+  }
+
   const outcome = voting.closeIfExpired();
   if (!outcome) return;
   if (outcome.status === "passed" && pendingLaw) {
-    const result = engine.add(pendingLaw.rule, pendingLaw.text);
-    lastConflict = result.conflict;
-    broadcastEffect(result.law.action.type, true);
+    const result = engine.beginCrisis(pendingLaw.rule, pendingLaw.text, config.crisisSeconds);
+    if (result.status === "added") broadcastEffect(result.law.action.type, true);
   }
   pendingLaw = undefined;
   broadcastSnapshot();

@@ -32,6 +32,36 @@ export interface AddLawResult {
   conflict?: LawConflict;
 }
 
+export type CrisisVoteChoice = "existing" | "proposed";
+
+export interface CrisisSnapshot {
+  zone: Zone;
+  existing: ActiveLaw;
+  proposed: ActiveLaw;
+  started_at: number;
+  ends_at: number;
+  existing_votes: number;
+  proposed_votes: number;
+  seconds_left: number;
+}
+
+interface PersistedCrisis extends Omit<CrisisSnapshot, "existing_votes" | "proposed_votes" | "seconds_left"> {
+  votes: Record<string, CrisisVoteChoice>;
+}
+
+export type CrisisStartResult =
+  | { status: "busy" }
+  | { status: "added"; law: ActiveLaw }
+  | { status: "started"; crisis: CrisisSnapshot };
+
+export interface CrisisOutcome {
+  winner: ActiveLaw;
+  loser: ActiveLaw;
+  winner_choice: CrisisVoteChoice;
+  existing_votes: number;
+  proposed_votes: number;
+}
+
 export interface EngineEvent {
   event_type: EventType;
   timestamp?: number | string;
@@ -55,6 +85,7 @@ interface PersistedState {
   nextId: number;
   active: ActiveLaw[];
   history: HistoricalLaw[];
+  crisis?: PersistedCrisis;
 }
 
 export class RuleEngine {
@@ -64,6 +95,7 @@ export class RuleEngine {
   private nextId = 1;
   private active = new Map<Zone, ActiveLaw>();
   private history: HistoricalLaw[] = [];
+  private crisis: PersistedCrisis | undefined;
   private readonly processedMessageIds = new Set<string>();
   private readonly eventCounts = new Map<string, number>();
   private readonly chatTimes = new Map<string, number[]>();
@@ -81,6 +113,87 @@ export class RuleEngine {
 
   get lawHistory(): HistoricalLaw[] {
     return [...this.history];
+  }
+
+  get currentCrisis(): CrisisSnapshot | undefined {
+    if (!this.crisis) return undefined;
+    const existingVotes = Object.values(this.crisis.votes).filter((vote) => vote === "existing").length;
+    const proposedVotes = Object.values(this.crisis.votes).filter((vote) => vote === "proposed").length;
+    return {
+      zone: this.crisis.zone,
+      existing: structuredClone(this.crisis.existing),
+      proposed: structuredClone(this.crisis.proposed),
+      started_at: this.crisis.started_at,
+      ends_at: this.crisis.ends_at,
+      existing_votes: existingVotes,
+      proposed_votes: proposedVotes,
+      seconds_left: Math.max(0, Math.ceil((this.crisis.ends_at - this.clock()) / 1000))
+    };
+  }
+
+  beginCrisis(rule: Rule, rawText: string, durationSeconds: number): CrisisStartResult {
+    if (this.crisis) return { status: "busy" };
+    if (rule.status !== "ok") throw new Error(`Cannot add a rule with status ${rule.status}`);
+    const zone = zoneForPart(rule.mutation.part_id);
+    const existing = this.active.get(zone);
+    if (!existing) return { status: "added", law: this.add(rule, rawText).law };
+
+    const now = this.clock();
+    const proposed: ActiveLaw = {
+      ...structuredClone(rule),
+      id: `law-${this.nextId++}`,
+      raw_text: rawText,
+      zone,
+      timestamp: now
+    };
+    this.crisis = {
+      zone,
+      existing: structuredClone(existing),
+      proposed,
+      started_at: now,
+      ends_at: now + Math.max(1, durationSeconds) * 1000,
+      votes: {}
+    };
+    this.persist();
+    return { status: "started", crisis: this.currentCrisis! };
+  }
+
+  castCrisisVote(userId: string, choice: CrisisVoteChoice): boolean {
+    if (!this.crisis || this.clock() >= this.crisis.ends_at || this.crisis.votes[userId]) return false;
+    this.crisis.votes[userId] = choice;
+    this.persist();
+    return true;
+  }
+
+  resolveCrisisIfExpired(): CrisisOutcome | undefined {
+    const crisis = this.crisis;
+    if (!crisis || this.clock() < crisis.ends_at) return undefined;
+    const existingVotes = Object.values(crisis.votes).filter((vote) => vote === "existing").length;
+    const proposedVotes = Object.values(crisis.votes).filter((vote) => vote === "proposed").length;
+    const proposedWins = proposedVotes > existingVotes;
+    const winner = proposedWins ? crisis.proposed : crisis.existing;
+    const loser = proposedWins ? crisis.existing : crisis.proposed;
+    const endedAt = this.clock();
+    this.history.push({
+      ...loser,
+      repealed_at: endedAt,
+      overruled_by: winner.id,
+      reason: `overruled by ${winner.id}`
+    });
+    if (proposedWins) {
+      this.active.set(crisis.zone, crisis.proposed);
+      this.eventCounts.delete(crisis.existing.id);
+      this.chatTimes.delete(crisis.existing.id);
+    }
+    this.crisis = undefined;
+    this.persist();
+    return {
+      winner: structuredClone(winner),
+      loser: structuredClone(loser),
+      winner_choice: proposedWins ? "proposed" : "existing",
+      existing_votes: existingVotes,
+      proposed_votes: proposedVotes
+    };
   }
 
   add(rule: Rule, rawText: string): AddLawResult {
@@ -170,6 +283,7 @@ export class RuleEngine {
       this.nextId = Math.max(1, parsed.nextId);
       this.active = new Map(parsed.active.map((law) => [law.zone, law]));
       this.history = parsed.history;
+      this.crisis = parsed.crisis;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
@@ -181,7 +295,8 @@ export class RuleEngine {
       version: 1,
       nextId: this.nextId,
       active: this.activeLaws,
-      history: this.history
+      history: this.history,
+      ...(this.crisis ? { crisis: this.crisis } : {})
     };
     writeFileSync(this.filePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
   }

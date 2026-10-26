@@ -1,6 +1,8 @@
 {
   "name": "constitution-beast",
+  "description": "A Twitch overlay where chat votes on laws that evolve a shared beast.",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {

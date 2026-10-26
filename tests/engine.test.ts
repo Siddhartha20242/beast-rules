@@ -107,4 +107,111 @@ describe("RuleEngine", () => {
     expect(reloadedOverruledBy).toBe(replacement.law.id);
     expect(next.law.id).not.toBe(reloadedId);
   });
+
+  it("starts a crisis for a passed replacement while keeping the old law active", () => {
+    const now = 10_000;
+    const engine = new RuleEngine({ filePath: temporaryFile(), clock: () => now });
+    const existing = engine.add(rule("wings"), "existing wings law").law;
+    const started = engine.beginCrisis(rule("tail"), "new tail law", 20);
+
+    expect(started.status).toBe("started");
+    expect(engine.activeLaws[0].id).toBe(existing.id);
+    expect(engine.currentCrisis).toMatchObject({
+      existing: { raw_text: "existing wings law" },
+      proposed: { raw_text: "new tail law" },
+      existing_votes: 0,
+      proposed_votes: 0,
+      seconds_left: 20
+    });
+  });
+
+  it("continues firing the existing law while crisis voting is open", () => {
+    const engine = new RuleEngine({ filePath: temporaryFile(), clock: () => 10_000 });
+    const existing = engine.add(rule("wings"), "existing follow law").law;
+    engine.beginCrisis(rule("tail"), "proposed follow law", 20);
+
+    expect(engine.handleEvent({ event_type: "channel.follow" }).fired.map((law) => law.id)).toEqual([existing.id]);
+  });
+
+  it("keeps the existing law when it wins", () => {
+    let now = 1_000;
+    const engine = new RuleEngine({ filePath: temporaryFile(), clock: () => now });
+    const existing = engine.add(rule("wings"), "existing law").law;
+    engine.beginCrisis(rule("tail"), "new law", 10);
+    expect(engine.castCrisisVote("viewer-1", "existing")).toBe(true);
+    now += 10_000;
+
+    const outcome = engine.resolveCrisisIfExpired();
+    expect(outcome).toMatchObject({ winner_choice: "existing", winner: { id: existing.id } });
+    expect(engine.activeLaws[0].id).toBe(existing.id);
+    expect(engine.lawHistory[0]).toMatchObject({ overruled_by: existing.id, reason: `overruled by ${existing.id}` });
+  });
+
+  it("activates the new law when it wins", () => {
+    let now = 1_000;
+    const engine = new RuleEngine({ filePath: temporaryFile(), clock: () => now });
+    const existing = engine.add(rule("wings"), "existing law").law;
+    const started = engine.beginCrisis(rule("tail"), "new law", 10);
+    expect(started.status).toBe("started");
+    const proposed = started.status === "started" ? started.crisis.proposed : undefined;
+    engine.castCrisisVote("viewer-1", "proposed");
+    now += 10_000;
+
+    expect(engine.resolveCrisisIfExpired()).toMatchObject({ winner_choice: "proposed", winner: { id: proposed?.id } });
+    expect(engine.activeLaws[0].id).toBe(proposed?.id);
+    expect(engine.lawHistory[0]).toMatchObject({ id: existing.id, overruled_by: proposed?.id });
+  });
+
+  it("keeps the existing law on a tie", () => {
+    let now = 1_000;
+    const engine = new RuleEngine({ filePath: temporaryFile(), clock: () => now });
+    const existing = engine.add(rule("wings"), "existing law").law;
+    engine.beginCrisis(rule("tail"), "new law", 10);
+    engine.castCrisisVote("viewer-1", "existing");
+    engine.castCrisisVote("viewer-2", "proposed");
+    now += 10_000;
+
+    expect(engine.resolveCrisisIfExpired()).toMatchObject({ winner_choice: "existing", existing_votes: 1, proposed_votes: 1 });
+    expect(engine.activeLaws[0].id).toBe(existing.id);
+  });
+
+  it("accepts one crisis vote per user", () => {
+    const engine = new RuleEngine({ filePath: temporaryFile(), clock: () => 1_000 });
+    engine.add(rule("wings"), "existing law");
+    engine.beginCrisis(rule("tail"), "new law", 10);
+    expect(engine.castCrisisVote("viewer", "existing")).toBe(true);
+    expect(engine.castCrisisVote("viewer", "proposed")).toBe(false);
+    expect(engine.currentCrisis).toMatchObject({ existing_votes: 1, proposed_votes: 0 });
+  });
+
+  it("rejects a new proposal while a crisis is active", () => {
+    const engine = new RuleEngine({ filePath: temporaryFile(), clock: () => 1_000 });
+    engine.add(rule("wings"), "existing law");
+    expect(engine.beginCrisis(rule("tail"), "first replacement", 10).status).toBe("started");
+    expect(engine.beginCrisis(rule("horns"), "queued proposal", 10).status).toBe("busy");
+    expect(engine.activeLaws).toHaveLength(1);
+    expect(engine.currentCrisis?.proposed.raw_text).toBe("first replacement");
+  });
+
+  it("persists an active crisis and its votes across reload", () => {
+    let now = 1_000;
+    const filePath = temporaryFile();
+    const engine = new RuleEngine({ filePath, clock: () => now });
+    const existing = engine.add(rule("wings"), "existing law").law;
+    const started = engine.beginCrisis(rule("tail"), "new law", 20);
+    expect(started.status).toBe("started");
+    engine.castCrisisVote("viewer-1", "proposed");
+
+    const loaded = new RuleEngine({ filePath, clock: () => now });
+    expect(loaded.currentCrisis).toMatchObject({
+      existing: { id: existing.id },
+      proposed: { raw_text: "new law" },
+      proposed_votes: 1,
+      seconds_left: 20
+    });
+    expect(loaded.castCrisisVote("viewer-1", "existing")).toBe(false);
+    now += 20_000;
+    expect(loaded.resolveCrisisIfExpired()?.winner_choice).toBe("proposed");
+    expect(loaded.activeLaws[0].raw_text).toBe("new law");
+  });
 });

@@ -7,26 +7,32 @@
   <style>
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
     * { box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; color: #f7f7ff; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent !important; background-color: transparent !important; color: #f7f7ff; }
     body { position: relative; }
     #scene { position: absolute; inset: 0; display: grid; place-items: center; }
-    #beast-wrap { position: absolute; width: min(55vh, 46vw, 620px); aspect-ratio: 1; top: 3vh; filter: drop-shadow(0 18px 18px #080b1c44); }
+    #beast-wrap { position: absolute; width: min(102vh, 90vw, 1160px); aspect-ratio: 1; top: 0; filter: drop-shadow(0 18px 18px #080b1c44); }
     #beast { width: 100%; height: 100%; overflow: visible; }
     .body-shape { fill: #626d8f; stroke: #202943; stroke-width: 8; stroke-linejoin: round; }
     .body-belly { fill: #8993b1; opacity: .82; }
+    .body-idle { transform-box: fill-box; transform-origin: center; animation: breathe 4.2s ease-in-out infinite; }
+    .base-eyes { transform-box: fill-box; transform-origin: center; animation: blink 5.2s ease-in-out infinite; }
+    .base-eye { fill: #fff7d6; stroke: #202943; stroke-width: 5; }
+    .base-pupil { fill: #202943; }
+    .base-mouth { fill: none; stroke: #202943; stroke-width: 7; stroke-linecap: round; }
     .part { opacity: 0; transition: opacity .45s ease; }
     .part.active { opacity: 1; }
     .part-fill { fill: var(--part-color, #c7d2fe); stroke: #202943; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
     .part-detail { fill: #fff; stroke: #202943; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+    .part-detail[fill="none"] { fill: none; }
     .eye-white { fill: #fff7d6; stroke: #202943; stroke-width: 5; }
     .pupil { fill: #202943; }
-    #hud { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: min(680px, 92vw); display: grid; gap: 10px; }
-    .panel { background: #171d33e8; border: 1px solid #9aa8d944; border-radius: 16px; padding: 12px 16px; box-shadow: 0 8px 26px #05071366; backdrop-filter: blur(8px); }
+    #hud { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: min(680px, calc(100vw - 24px)); max-width: calc(100vw - 24px); min-width: 0; display: grid; gap: 10px; }
+    .panel { min-width: 0; background: #171d33e8; border: 1px solid #9aa8d944; border-radius: 16px; padding: 12px 16px; box-shadow: 0 8px 26px #05071366; backdrop-filter: blur(8px); }
     #howto { text-align: center; color: #fff; font-size: clamp(16px, 2vw, 23px); font-weight: 800; letter-spacing: .015em; }
     #howto strong { color: #ffd166; }
     #vote { display: none; }
     #vote.show { display: block; }
-    #proposal-text { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 7px; }
+    #proposal-text { width: 100%; min-width: 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 7px; }
     #vote-track { height: 12px; background: #353d59; border-radius: 99px; overflow: hidden; display: flex; }
     #yes-bar { background: #73e0a9; width: 0%; transition: width .25s ease; }
     #no-bar { background: #ff6b7a; flex: 1; transition: width .25s ease; }
@@ -36,6 +42,18 @@
     #laws .id { color: #ffd166; font-weight: 800; }
     #laws .law.highlighted { color: #ffe17a; text-shadow: 0 0 12px #ffc400; }
     #notice { display:none; position:absolute; z-index:5; left:50%; top:18px; transform:translateX(-50%); padding:12px 18px; border:1px solid #ffcc66; border-radius:10px; background:#24190de8; color:#ffe5b4; font-weight:700; }
+    #crisis-banner { display:none; position:absolute; z-index:4; top:18px; left:50%; transform:translateX(-50%); width:min(920px,calc(100vw - 24px)); padding:14px; border:2px solid #ff6969; border-radius:16px; background:#341d28f2; box-shadow:0 0 32px #ff3d4b55; }
+    #crisis-banner.show { display:block; }
+    #crisis-title { color:#ffe37b; text-align:center; font-size:clamp(16px,2.3vw,24px); font-weight:950; letter-spacing:.1em; }
+    #crisis-countdown { margin:4px 0 10px; text-align:center; color:#ffd8d8; font-size:14px; font-weight:800; }
+    #crisis-laws { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .crisis-law { min-width:0; padding:11px; border-radius:11px; background:#171d33e8; border:1px solid #ff9c9c66; }
+    .crisis-law-title { color:#ffd166; font-size:12px; font-weight:900; margin-bottom:5px; }
+    .crisis-law-text { min-height:2.4em; font-size:clamp(11px,1.4vw,14px); line-height:1.2; font-weight:700; overflow-wrap:anywhere; }
+    .crisis-track { height:9px; margin-top:8px; overflow:hidden; border-radius:99px; background:#353d59; }
+    .crisis-fill { height:100%; width:0; background:#73e0a9; transition:width .2s; }
+    #crisis-proposed-fill { background:#ff7b89; }
+    .crisis-count { margin-top:5px; color:#d9dcec; font-size:12px; font-weight:800; }
     #sim-tag { position: absolute; right: 22px; top: 20px; padding: 5px 9px; border-radius: 6px; background: #ffd166; color: #29233a; font-size: 10px; font-weight: 900; letter-spacing: .08em; opacity: 0; transition: opacity .2s; }
     #sim-tag.visible { opacity: 1; }
     #flash { position: fixed; inset: 0; pointer-events: none; background: #fff; opacity: 0; }
@@ -43,12 +61,22 @@
     .shake #beast-wrap { animation: shake .4s ease-in-out; }
     .confetti-piece { position: fixed; top: -14px; width: 9px; height: 14px; border-radius: 2px; pointer-events: none; animation: fall 1.6s linear forwards; }
     @keyframes flash { 15% { opacity: .72; } 100% { opacity: 0; } }
+    @keyframes breathe { 0%,100% { transform: translateY(0) scale(1,1); } 50% { transform: translateY(-2px) scale(1.012,1.025); } }
+    @keyframes blink { 0%,43%,47%,100% { transform: scaleY(1); } 45% { transform: scaleY(.08); } }
     @keyframes shake { 0%,100% { transform: translateX(0) rotate(0); } 20% { transform: translateX(-12px) rotate(-2deg); } 45% { transform: translateX(10px) rotate(2deg); } 70% { transform: translateX(-7px) rotate(-1deg); } }
     @keyframes fall { to { transform: translateY(110vh) rotate(620deg); opacity: .2; } }
   </style>
 </head>
 <body>
   <div id="notice"></div>
+  <section id="crisis-banner" aria-live="polite">
+    <div id="crisis-title">⚠ CONSTITUTIONAL CRISIS ⚠</div>
+    <div id="crisis-countdown"></div>
+    <div id="crisis-laws">
+      <div class="crisis-law"><div class="crisis-law-title">1 · EXISTING LAW</div><div id="crisis-existing-text" class="crisis-law-text"></div><div class="crisis-track"><div id="crisis-existing-fill" class="crisis-fill"></div></div><div id="crisis-existing-count" class="crisis-count"></div></div>
+      <div class="crisis-law"><div class="crisis-law-title">2 · NEW LAW</div><div id="crisis-proposed-text" class="crisis-law-text"></div><div class="crisis-track"><div id="crisis-proposed-fill" class="crisis-fill"></div></div><div id="crisis-proposed-count" class="crisis-count"></div></div>
+    </div>
+  </section>
   <div id="scene">
     <div id="beast-wrap" aria-label="The evolving Constitution Beast">
       <svg id="beast" viewBox="0 0 500 500" role="img" aria-label="Flat SVG beast with five mutation zones">
@@ -58,9 +86,17 @@
         <g class="part" data-part="lightning"><path class="part-fill" d="M108 104h42l-23 48h31l-65 72 17-55H82zM392 104h-42l23 48h-31l65 72-17-55h28z"/></g>
 
         <!-- Back zone -->
-        <g class="part" data-part="wings"><path class="part-fill" d="M157 218Q72 186 49 109Q112 117 155 164Q113 104 124 64Q184 103 202 176Z"/><path class="part-fill" d="M343 218Q428 186 451 109Q388 117 345 164Q387 104 376 64Q316 103 298 176Z"/></g>
+        <g class="part" data-part="wings">
+          <g>
+            <path class="part-fill" d="M190 232Q160 205 125 193Q87 178 48 136Q51 177 78 207Q51 199 29 202Q43 239 91 260Q78 279 76 300Q113 290 143 266Q164 282 190 291Z"/>
+            <path class="part-detail" fill="none" d="M181 249Q137 226 70 166M180 261Q132 250 39 211M178 273Q133 273 88 286M151 239Q132 211 107 193M165 257Q143 246 125 229"/>
+          </g>
+          <g transform="translate(500 0) scale(-1 1)">
+            <path class="part-fill" d="M190 232Q160 205 125 193Q87 178 48 136Q51 177 78 207Q51 199 29 202Q43 239 91 260Q78 279 76 300Q113 290 143 266Q164 282 190 291Z"/>
+            <path class="part-detail" fill="none" d="M181 249Q137 226 70 166M180 261Q132 250 39 211M178 273Q133 273 88 286M151 239Q132 211 107 193M165 257Q143 246 125 229"/>
+          </g>
+        </g>
         <g class="part" data-part="tail"><path class="part-fill" d="M342 323Q414 338 403 392Q396 430 444 427Q416 470 376 444Q337 419 359 376L321 355Z"/></g>
-        <g class="part" data-part="shell"><path class="part-fill" d="M172 220Q250 164 328 220L344 326Q250 375 156 326Z"/><path class="part-detail" d="M250 184v167m-89-99h178m-164 73h150" fill="none"/></g>
 
         <!-- Limbs zone -->
         <g class="part" data-part="tentacles"><path class="part-fill" d="M167 325Q125 364 153 397Q181 416 143 447Q199 448 205 410L215 350zM333 325Q375 364 347 397Q319 416 357 447Q301 448 295 410L285 350z"/></g>
@@ -68,8 +104,22 @@
         <g class="part" data-part="extra_arms"><path class="part-fill" d="M157 260Q98 250 81 289L116 302 77 322Q124 337 170 307zM343 260Q402 250 419 289L384 302 423 322Q376 337 330 307z"/></g>
 
         <!-- Beast body -->
-        <path class="body-shape" d="M250 112C178 112 139 171 145 252L157 331Q167 372 250 379Q333 372 343 331L355 252C361 171 322 112 250 112Z"/>
-        <path class="body-belly" d="M196 250Q250 224 304 250L293 330Q250 354 207 330Z"/>
+        <g class="body-idle">
+          <path class="body-shape" d="M250 112C178 112 139 171 145 252L157 331Q167 372 250 379Q333 372 343 331L355 252C361 171 322 112 250 112Z"/>
+          <path class="body-belly" d="M196 250Q250 224 304 250L293 330Q250 354 207 330Z"/>
+          <g class="base-eyes">
+            <ellipse class="base-eye" cx="213" cy="169" rx="16" ry="12"/><ellipse class="base-eye" cx="287" cy="169" rx="16" ry="12"/>
+            <circle class="base-pupil" cx="216" cy="171" r="5"/><circle class="base-pupil" cx="284" cy="171" r="5"/>
+          </g>
+          <path class="base-mouth" d="M224 207Q250 225 276 207"/>
+          <path d="M244 193l6 5 6-5" fill="none" stroke="#202943" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+
+        <!-- Back shell sits over the torso so its segmented silhouette remains visible. -->
+        <g class="part" data-part="shell">
+          <path class="part-fill" d="M158 255Q168 228 250 228Q332 228 342 255L330 319Q250 357 170 319Z"/>
+          <path class="part-detail" d="M250 233l25 25-25 28-25-28zm-75 31 46-11m58 0 46 11m-118 1-8 48m108-48 8 48m-60-59v90" fill="none"/>
+        </g>
 
         <!-- Torso zone -->
         <g class="part" data-part="spikes"><path class="part-fill" d="M157 206l-36-20 25 51-32 22 40 13M343 206l36-20-25 51 32 22-40 13"/></g>
@@ -101,6 +151,7 @@
     let reconnectDelay = 500;
     let simTimer;
     let countdownTimer;
+    let crisisCountdownTimer;
     let noticeTimer;
     let highlightedLawId = "";
 
@@ -134,12 +185,34 @@
       }
       if (!laws.children.length) laws.textContent = "No active laws yet — write the beast together.";
 
+      const crisis = state.crisis;
+      const crisisBanner = document.getElementById("crisis-banner");
+      crisisBanner.classList.toggle("show", Boolean(crisis));
+      if (crisis) {
+        const totalVotes = Math.max(1, crisis.existing_votes + crisis.proposed_votes);
+        document.getElementById("crisis-existing-text").textContent = crisis.existing.raw_text;
+        document.getElementById("crisis-proposed-text").textContent = crisis.proposed.raw_text;
+        document.getElementById("crisis-existing-count").textContent = `Votes: ${crisis.existing_votes} · Type 1`;
+        document.getElementById("crisis-proposed-count").textContent = `Votes: ${crisis.proposed_votes} · Type 2`;
+        document.getElementById("crisis-existing-fill").style.width = `${crisis.existing_votes / totalVotes * 100}%`;
+        document.getElementById("crisis-proposed-fill").style.width = `${crisis.proposed_votes / totalVotes * 100}%`;
+        const updateCrisisCountdown = () => {
+          const seconds = Math.max(0, Math.ceil((crisis.ends_at - Date.now()) / 1000));
+          document.getElementById("crisis-countdown").textContent = `${seconds} seconds left · vote 1 or 2 in chat`;
+        };
+        updateCrisisCountdown();
+        clearInterval(crisisCountdownTimer);
+        crisisCountdownTimer = setInterval(updateCrisisCountdown, 500);
+      } else {
+        clearInterval(crisisCountdownTimer);
+      }
+
       const proposal = state.proposal;
       const vote = document.getElementById("vote");
       vote.classList.toggle("show", Boolean(proposal));
       if (proposal) {
         const total = Math.max(1, proposal.yes + proposal.no);
-        document.getElementById("proposal-text").textContent = `${proposal.proposalId}: ${proposal.text || "New law"}`;
+        document.getElementById("proposal-text").textContent = proposal.text || "New law";
         document.getElementById("yes-bar").style.width = `${proposal.yes / total * 100}%`;
         document.getElementById("no-bar").style.width = `${proposal.no / total * 100}%`;
         document.getElementById("yes-label").textContent = `YES ${proposal.yes}`;

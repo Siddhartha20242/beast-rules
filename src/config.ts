@@ -11,6 +11,7 @@ const compilerValue = process.env.COMPILER;
 export const config = {
   port: positiveInteger(process.env.PORT, 3000),
   voteSeconds: positiveInteger(process.env.VOTE_SECONDS, 30),
+  crisisSeconds: positiveInteger(process.env.CRISIS_SECONDS, 20),
   compiler: compilerValue === "ollama" || compilerValue === "template" ? compilerValue : "auto",
   chatReplies: process.env.CHAT_REPLIES === "on" ? "on" : "off",
   twitchClientId: process.env.TWITCH_CLIENT_ID ?? "",

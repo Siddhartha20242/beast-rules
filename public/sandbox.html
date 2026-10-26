@@ -30,13 +30,15 @@
     .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .row { display: flex; gap: 8px; }
     .row button { flex: 1; }
+    .crisis-votes { display: none; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .crisis-votes.show { display: grid; }
+    .crisis-votes button { background: #632d3c; border-color: #ff7b89; }
     #message { color: #bdc5de; min-height: 19px; font-size: 12px; margin-top: 10px; }
     #message.error { color: #ff8694; }
     .stage { position: relative; min-height: 650px; overflow: hidden; display: flex; flex-direction: column; }
-    .stage::before { content: ""; position: absolute; width: 72%; aspect-ratio: 1; top: 3%; left: 14%; border-radius: 50%; background: radial-gradient(circle, #30385c 0%, #1c2340 52%, transparent 72%); }
     .stage-head { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; }
     .stage-head span { color: #8d98c0; font-size: 12px; }
-    iframe { position: relative; z-index: 1; border: 0; width: 100%; flex: 1; min-height: 580px; background: transparent; }
+    iframe { position: relative; z-index: 1; border: 0; width: 100%; flex: 1; min-height: 580px; background-color: #111522; background-image: linear-gradient(45deg, #1b2030 25%, transparent 25%), linear-gradient(-45deg, #1b2030 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1b2030 75%), linear-gradient(-45deg, transparent 75%, #1b2030 75%); background-size: 28px 28px; background-position: 0 0, 0 14px, 14px -14px, -14px 0; }
     .events button { min-height: 46px; }
     .hint { color: #7983a5; font-size: 11px; margin-top: 8px; }
     @media (max-width: 880px) { main { grid-template-columns: 1fr; } .stage { min-height: 540px; } iframe { min-height: 470px; } }
@@ -50,8 +52,8 @@
       <p>Choose a pretend viewer, propose a law, and vote it into the creature. Events below test the law after it passes.</p>
 
       <div class="section"><h2>Act as a viewer</h2><div class="viewers" id="viewers"></div></div>
-      <div class="section"><h2>Propose a law</h2><textarea id="law-text">When someone subs grow wings and shake the screen</textarea><div class="row" style="margin-top:8px"><button class="primary" id="propose">Compile and propose</button></div></div>
-      <div class="section"><h2>Vote on the current proposal</h2><div class="row"><button class="vote-yes" id="yes">Vote yes</button><button class="vote-no" id="no">Vote no</button></div><div class="hint">One vote per viewer. The vote closes after VOTE_SECONDS.</div></div>
+      <div class="section"><h2>Propose a law</h2><textarea id="law-text" placeholder="When someone subs grow wings and shake the screen"></textarea><div class="row" style="margin-top:8px"><button class="primary" id="propose">Compile and propose</button></div></div>
+      <div class="section"><h2>Vote on the current proposal</h2><div class="row"><button class="vote-yes" id="yes">Vote yes</button><button class="vote-no" id="no">Vote no</button></div><div class="crisis-votes" id="crisis-votes"><button data-crisis-choice="existing">1 · Existing law</button><button data-crisis-choice="proposed">2 · New law</button></div><div class="hint">One vote per viewer. The vote closes after VOTE_SECONDS.</div></div>
       <div class="section events"><h2>Fire a simulated event</h2><div class="actions">
         <button data-event="follow">Follow</button><button data-event="sub">Subscribe</button><button data-event="raid">Raid</button><button data-event="cheer">Cheer</button><button data-event="chat-spike">Chat spike</button>
       </div><div class="hint">Each button marks the overlay with a SIM tag. Chat spike sends 30 messages in the one-minute window.</div></div>
@@ -96,10 +98,17 @@
     document.getElementById("propose").addEventListener("click", () => post("/api/sandbox/propose", { viewerId: viewer, text: document.getElementById("law-text").value }));
     document.getElementById("yes").addEventListener("click", () => post("/api/sandbox/vote", { viewerId: viewer, choice: "yes" }));
     document.getElementById("no").addEventListener("click", () => post("/api/sandbox/vote", { viewerId: viewer, choice: "no" }));
+    for (const button of document.querySelectorAll("[data-crisis-choice]")) {
+      button.addEventListener("click", () => post("/api/sandbox/crisis-vote", { viewerId: viewer, choice: button.dataset.crisisChoice }));
+    }
     for (const button of document.querySelectorAll("[data-event]")) button.addEventListener("click", () => post("/api/sandbox/event", { event: button.dataset.event }));
 
     const socket = new WebSocket(`${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`);
     socket.addEventListener("open", () => { document.getElementById("connection").textContent = "Overlay connected"; });
+    socket.addEventListener("message", (event) => {
+      const state = JSON.parse(event.data);
+      if (state.type === "snapshot") document.getElementById("crisis-votes").classList.toggle("show", Boolean(state.crisis));
+    });
     socket.addEventListener("close", () => { document.getElementById("connection").textContent = "Overlay reconnecting…"; });
   </script>
 </body>
