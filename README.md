@@ -1,8 +1,23 @@
 # Beast Rules
 
-Chat writes the laws of the stream, and the laws are the creature. Viewers propose rules, vote on them, and watch the beast evolve.
+**Chat writes the laws of the stream, and the laws are the creature: the beast is a state machine you can see.** Every law in force occupies one part of its body, and a repealed or defeated law leaves a visible scar. The rule system and the picture on screen are the same object.
+
+A viewer types `!law when someone subs grow wings`. Chat votes. If it passes, the beast grows wings and the law fires on real Twitch events from then on.
 
 ![How a law travels from Twitch chat to the beast](docs/images/architecture.png)
+
+## Why this is different
+
+| Kind of stream tool | What the viewer does | What Beast Rules does instead |
+| --- | --- | --- |
+| Node-editor automation | Nothing. The streamer builds the logic alone, in a graph most viewers cannot read. | Viewers write the logic in one plain-English sentence, and the result is a picture instead of a graph. |
+| Chat pets and creatures | Feed or pet something that is separate from any rules. | The creature has no stats to feed. Its body is the list of laws, so a new law is a new part. |
+| "Chat prompts an AI" overlays | Type a prompt and read whatever text comes back. | No model text ever reaches the screen. Input becomes a closed-schema rule or a fixed refusal. |
+| Reward menus | Pick from options the streamer prepared. | Chat invents the option, votes on it, and can repeal it later. |
+
+This is a comparison of categories, not of specific products.
+
+**Adoption path:** run `npm run sandbox`, see the whole arc in about a minute, then add the overlay URL to OBS as a browser source.
 
 ## Try it in 60 seconds
 
@@ -140,7 +155,13 @@ Run `npm run eval -- --file tests/heldout3.json --verbose` to reproduce. The mod
 
 This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **268 tests across 20 files**. Codex ran out of free credits near the end, so several late changes were written with a different AI assistant instead and are labelled that way in the log: the network-resilience fix, the ballot and repeal features, the chat-command parser, and the beast character and constitution features. The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
 
-Three examples of problems found and resolved: [the parser initially emitted `eventType` instead of schema-required `event_type`](docs/CODEX_LOG.md#roadmap-step-2--templatecompiler-only); [npm's shared cache rejected writes, so installation was retried with a temporary cache](docs/CODEX_LOG.md#streamer-controls-and-obs-scene-switching); and [the preview initially missed its first frame, so it was rerun from the start and all 15 parts were verified](docs/CODEX_LOG.md#sandbox-crowd-bias-reliable-part-preview-and-legacy-proposer-labels). **No runtime model call goes through Codex:** law compilation uses the local parser and, when configured, a local Ollama server.
+Three things Codex got wrong, and what caught them:
+
+1. **A wrong field name.** The first parser emitted `eventType` where the schema requires `event_type`. The first contract run failed 22 cases, the parser was fixed, and the schema stayed the source of truth ([log entry](docs/CODEX_LOG.md#roadmap-step-2--templatecompiler-only)).
+2. **A verifier that matched too loosely.** The check that a model-proposed rule agrees with the viewer's words treated "scene" as a fuzzy match for the colour "green". Tests caught it before the evaluation set was run, and the fuzzy match now requires the same prefix ([log entry](docs/CODEX_LOG.md#parser-numbercolor-support-effect-verification-and-heldout2-evaluation)).
+3. **A model that was too slow and too trusting.** A real `gemma3:4b` call took 6.5 seconds, longer than the five-second timeout, and held-out runs showed the model alone was less reliable than hoped. The design changed to parser first, with the model allowed only to rescue refusals behind a verifier ([log entry](docs/CODEX_LOG.md#ollama-compiler-and-automatic-fallback)).
+
+**The runtime is built so a model cannot hurt the stream.** The deterministic parser handles every sentence it understands. The optional local model can only choose values from the closed schema, and a verifier can reject its answer. No model text ever reaches the screen. **No runtime model call goes through Codex:** law compilation uses the local parser and, when configured, a local Ollama server.
 
 ## Twitch setup and live test
 
