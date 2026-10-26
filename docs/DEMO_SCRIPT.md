@@ -27,14 +27,14 @@ Assigned laws (all verified to compile):
 | Time | Screen | Narration (read it, do not improvise) |
 |---|---|---|
 | 0:00-0:10 | Cold open: overlay full screen. A law banner reads the law text and a part grows (wings). No title card. | (silence, then) "Chat just wrote a law. And the law became part of the creature." |
-| 0:10-0:25 | Overlay plus Twitch chat side by side. | "This is Constitution Beast. Viewers type a law in plain English. Chat votes. If it passes, it fires on real Twitch events and grows a part on the beast." |
+| 0:10-0:25 | Overlay plus Twitch chat side by side. | "This is Beast Rules. Viewers type a law in plain English. Chat votes. If it passes, it fires on real Twitch events and grows a part on the beast." |
 | 0:25-0:55 | Friend A proposes the wings law in real chat. Terminal corner shows the EventSub line. Vote bar fills, friends type yes, wings grow. | "That message came through Twitch EventSub. A compiler turns it into a strict rule, with no free text and no code. Chat votes, and the law is enacted." |
 | 0:55-1:20 | Friend B proposes horns, passes. Press the SIM subscribe button. Screen shakes, SIM tag shows. | "Now the law runs. A sub, simulated here and labeled, triggers the shake." |
 | 1:20-1:45 | Friend D proposes the 30-messages law. Everyone spams chat. Spikes law fires from real chat activity. | "This one needs no subs or raids. It fires from chat activity, so it works for small streams too." |
 | 1:45-2:10 | Friend E proposes the bank law. Refusal appears. Then show the log line with `status="unsafe"` or unsupported. | "The compiler only knows a fixed vocabulary. Anything outside it is refused, and the model can never write text onto the screen." |
 | 2:10-2:35 | Friend C proposes red eyes (head zone, conflicts with horns). Crisis banner, both laws, vote 1 or 2, winner applied. | "Two laws want the same body zone. That is a constitutional crisis, and chat votes on which survives." |
 | 2:35-2:50 | Stop and restart the server. Overlay returns with the same beast and laws. Flash the Codex build log or green tests for 3 seconds. | "The beast persists across streams. Codex built the whole project, driven by a test suite, and the log is in the repo." |
-| 2:50-3:00 | Title card: name, repo URL. | "Constitution Beast. Chat writes the laws, and the laws are the creature." |
+| 2:50-3:00 | Title card: name, repo URL. | "Beast Rules. Chat writes the laws, and the laws are the creature." |
 
 ## Cutting rules
 - If the crisis or the refusal does not record cleanly in two takes, cut it. Do not mention anything not shown.

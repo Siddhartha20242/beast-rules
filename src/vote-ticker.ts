@@ -1,3 +1,5 @@
+import { displayUsername } from "./describe.js";
+
 export type VoteTickerChoice = "yes" | "no" | "1" | "2";
 
 export interface VoteTickerEntry {
@@ -14,7 +16,7 @@ export function createVoteTickerEntry(
   now = Date.now(),
   options: { crisis?: boolean; simulated?: boolean } = {}
 ): VoteTickerEntry {
-  const safeUsername = username.replace(/\p{Cc}/gu, "").trim().slice(0, 32) || "unknown";
+  const safeUsername = displayUsername(username);
   return {
     username: safeUsername,
     choice,

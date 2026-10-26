@@ -1,6 +1,6 @@
 {
-  "name": "constitution-beast",
-  "description": "A Twitch overlay where chat votes on laws that evolve a shared beast.",
+  "name": "beast-rules",
+  "description": "A Twitch overlay where chat writes stream rules that become a shared evolving beast.",
   "version": "0.1.0",
   "license": "MIT",
   "private": true,
@@ -12,7 +12,6 @@
     "eval": "node --import tsx scripts/eval.ts",
     "sandbox": "node --import tsx src/server.ts",
     "twitch:auth": "node --import tsx src/twitch/auth.ts",
-    "demo": "echo 'Demo replay will be added in roadmap step 8.'",
     "lint": "eslint ."
   },
   "dependencies": {

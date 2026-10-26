@@ -3,8 +3,11 @@ import { createLawBannerPayload, lawBannerForSnapshot } from "../src/law-banner.
 
 const law = {
   id: "law-12",
-  raw_text: "when someone subs grow wings and shake the screen",
+  status: "ok" as const,
+  trigger: { event_type: "channel.subscribe" as const, threshold: 1 },
+  action: { type: "screen_shake" as const, intensity: "low" as const },
   mutation: { part_id: "wings" as const, color: "yellow" as const },
+  raw_text: "when someone subs grow wings and shake the screen",
   zone: "back" as const,
   proposer_name: "viewer_one"
 };
@@ -14,7 +17,7 @@ describe("law passed snapshot banner", () => {
     const payload = createLawBannerPayload("crisis_resolved", law, {
       now: 1000,
       headline: "NEW LAW SURVIVES",
-      relatedLawText: "follows grow tail",
+      relatedLaw: { ...law, trigger: { event_type: "channel.follow", threshold: 1 }, mutation: { part_id: "tail", color: "red" } },
       relatedLawRelation: "overruled"
     });
 
@@ -23,12 +26,12 @@ describe("law passed snapshot banner", () => {
       event: "crisis_resolved",
       headline: "NEW LAW SURVIVES",
       law_id: "law-12",
-      law_text: "when someone subs grow wings and shake the screen",
+      law_text: "When someone subscribes: grow yellow wings + screen shake",
       part_id: "wings",
       color: "yellow",
       zone: "back",
       proposer_name: "viewer_one",
-      related_law_text: "follows grow tail",
+      related_law_text: "When someone follows: grow red tail + screen shake",
       related_law_relation: "overruled",
       ends_at: 5000
     });
@@ -39,7 +42,7 @@ describe("law passed snapshot banner", () => {
   it("marks a passed replacement as a challenge until the crisis vote resolves", () => {
     const payload = createLawBannerPayload("passed", law, {
       now: 0,
-      relatedLawText: "old law text",
+      relatedLaw: { ...law, trigger: { event_type: "channel.follow", threshold: 1 } },
       relatedLawRelation: "challenged"
     });
     expect(payload).toMatchObject({ event: "passed", related_law_relation: "challenged", ends_at: 4000 });

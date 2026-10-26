@@ -1,4 +1,5 @@
-import type { Color, PartId } from "./compiler/types.js";
+import type { Color, PartId, Rule } from "./compiler/types.js";
+import { describeRule, displayUsername } from "./describe.js";
 import type { Zone } from "./schema.js";
 
 export type LawBannerEvent = "passed" | "crisis_resolved";
@@ -19,10 +20,8 @@ export interface LawBannerPayload {
   ends_at: number;
 }
 
-export interface LawBannerLaw {
+export interface LawBannerLaw extends Rule {
   id: string;
-  raw_text: string;
-  mutation: { part_id: PartId; color: Color };
   zone: Zone;
   proposer_name?: string;
 }
@@ -34,7 +33,7 @@ export function createLawBannerPayload(
     now?: number;
     durationMs?: number;
     headline?: string;
-    relatedLawText?: string;
+    relatedLaw?: LawBannerLaw;
     relatedLawRelation?: RelatedLawRelation;
   } = {}
 ): LawBannerPayload {
@@ -44,12 +43,17 @@ export function createLawBannerPayload(
     event,
     headline: options.headline ?? (event === "passed" ? "LAW PASSED" : "CRISIS RESOLVED"),
     law_id: law.id,
-    law_text: law.raw_text,
+    law_text: describeRule({ status: law.status, trigger: law.trigger, action: law.action, mutation: law.mutation }),
     part_id: law.mutation.part_id,
     color: law.mutation.color,
     zone: law.zone,
-    ...(law.proposer_name && law.proposer_name !== "unknown" ? { proposer_name: law.proposer_name } : {}),
-    ...(options.relatedLawText ? { related_law_text: options.relatedLawText } : {}),
+    ...(law.proposer_name && law.proposer_name !== "unknown" ? { proposer_name: displayUsername(law.proposer_name) } : {}),
+    ...(options.relatedLaw ? { related_law_text: describeRule({
+      status: options.relatedLaw.status,
+      trigger: options.relatedLaw.trigger,
+      action: options.relatedLaw.action,
+      mutation: options.relatedLaw.mutation
+    }) } : {}),
     ...(options.relatedLawRelation ? { related_law_relation: options.relatedLawRelation } : {}),
     ends_at: now + (options.durationMs ?? 4000)
   };

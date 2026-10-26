@@ -61,3 +61,24 @@ export function chatMessageDetails(payload: unknown): { userId: string; userName
     messageId: translateTwitchEvent("chat", payload).message_id ?? ""
   };
 }
+
+/** Extract an event actor's display name without ever exposing its chat text. */
+export function eventActorName(name: TwitchEventName, payload: unknown): string | undefined {
+  const outer = bag(payload);
+  const event = bag(outer.event ?? payload);
+  const chatter = bag(event.chatter);
+  const user = bag(event.user);
+  return firstString(
+    event.chatter_user_name, event.chatterDisplayName,
+    event.user_name, event.userName, event.userDisplayName,
+    event.user_login, event.userLogin,
+    event.from_broadcaster_user_name, event.fromBroadcasterName,
+    event.from_broadcaster_user_login,
+    event.broadcaster_user_name, event.broadcasterUserName,
+    event.gifter_user_name, event.gifterUserName,
+    event.raiding_broadcaster_user_name, event.raidingBroadcasterName,
+    event.display_name, event.displayName,
+    chatter.user_name, chatter.name,
+    user.name, user.display_name, user.displayName
+  ) ?? (name === "chat" ? chatMessageDetails(payload).userName : "Twitch");
+}

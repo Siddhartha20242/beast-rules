@@ -9,7 +9,7 @@ import type { Rule } from "../src/compiler/types.js";
 const temporaryDirectories: string[] = [];
 
 function temporaryFile(): string {
-  const directory = mkdtempSync(join(tmpdir(), "constitution-beast-"));
+  const directory = mkdtempSync(join(tmpdir(), "beast-rules-"));
   temporaryDirectories.push(directory);
   return join(directory, "data", "beast.json");
 }

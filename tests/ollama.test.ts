@@ -60,7 +60,7 @@ describe("OllamaCompiler and AutoCompiler", () => {
 
     const result = await compiler.compileWithPath("a gift event grows red horns");
     expect(result).toEqual({ rule: testRule, path: "model (verified)" });
-    expect(requestBody).toMatchObject({ model: "test-model", stream: false, format: expect.objectContaining({ title: "ConstitutionBeastRule" }) });
+    expect(requestBody).toMatchObject({ model: "test-model", stream: false, format: expect.objectContaining({ title: "BeastRulesRule" }) });
   });
 
   it("falls back after two invalid JSON responses", async () => {

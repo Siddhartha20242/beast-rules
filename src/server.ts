@@ -11,7 +11,7 @@ import { OllamaCompiler } from "./compiler/ollama.js";
 import { TemplateCompiler } from "./compiler/template.js";
 import type { Rule } from "./compiler/types.js";
 import { VotingManager, type VoteChoice } from "./voting.js";
-import { chatMessageDetails, translateTwitchEvent } from "./twitch/events.js";
+import { chatMessageDetails, eventActorName, translateTwitchEvent } from "./twitch/events.js";
 import { hasModeratorBadge, parseStreamerCommand, streamerRole, StreamerControlState } from "./twitch/streamer-controls.js";
 import { startTwitchRuntime, type TwitchRuntime } from "./twitch/runtime.js";
 import { formatDecisionLogLine } from "./twitch/logging.js";
@@ -19,6 +19,10 @@ import { createLawBannerPayload, lawBannerForSnapshot, type LawBannerPayload } f
 import { createVoteTickerEntry, voteTickerForSnapshot, type VoteTickerChoice, type VoteTickerEntry } from "./vote-ticker.js";
 import { ObsSceneSwitcher, type ObsClient } from "./obs/scene-switcher.js";
 import { crowdCrisisVoteChoice, crowdVoteChoice } from "./crowd.js";
+import { describeRule, displayUsername, lawForDisplay } from "./describe.js";
+import { createLawToast, lawToastsForSnapshot, pushLawToast, type LawToast } from "./law-toast.js";
+import { loadContractExamples } from "./law-hints.js";
+import { refusalForStatus, type RefusalStatus } from "./refusals.js";
 
 const app = express();
 const server = createServer(app);
@@ -48,6 +52,8 @@ let eventSubSubscriptions: HealthSubscription[] = [];
 let lawBanner: LawBannerPayload | undefined;
 let proposalSequence = 0;
 const voteTicker: VoteTickerEntry[] = [];
+let lawToasts: LawToast[] = [];
+const lawHints = loadContractExamples();
 const crowdScheduledFor = new Set<string>();
 const crisisProposalMessage = "A constitutional crisis is underway. Wait for it to resolve before proposing another law.";
 const logDecision = (decision: string, fields: Record<string, string | number | boolean | undefined> = {}) => {
@@ -63,9 +69,7 @@ function makeSnapshot() {
     type: "snapshot",
     paused: streamerControls.paused,
     laws_passed_count: engine.lawHistory.length + engine.activeLaws.length,
-    active_laws: engine.activeLaws.map(({ id, raw_text, zone, timestamp, proposer_name, ...rule }) => ({
-      id, raw_text, zone, timestamp, proposer_name, compiler_path: rule.compiler_path, trigger: rule.trigger, action: rule.action, mutation: rule.mutation
-    })),
+    active_laws: engine.activeLaws.map((law) => lawForDisplay(law)),
     beast_parts: Object.fromEntries(engine.activeLaws.map((law) => [law.zone, {
       part_id: law.mutation.part_id,
       color: law.mutation.color,
@@ -73,17 +77,23 @@ function makeSnapshot() {
     }])),
     proposal: current ? {
       ...current,
-      text: pendingLaw?.text,
+      text: pendingLaw ? describeRule(pendingLaw.rule) : undefined,
       compiler_path: pendingLaw?.compilerPath,
-      proposer_name: pendingLaw?.proposerName,
+      proposer_name: pendingLaw ? displayUsername(pendingLaw.proposerName) : undefined,
       yes: current.yes,
       no: current.no,
       total: current.voters
     } : null,
-    crisis: engine.currentCrisis ?? null,
+    crisis: engine.currentCrisis ? {
+      ...engine.currentCrisis,
+      existing: lawForDisplay(engine.currentCrisis.existing),
+      proposed: lawForDisplay(engine.currentCrisis.proposed)
+    } : null,
     conflict: lastConflict ?? null,
     law_banner: lawBannerForSnapshot(lawBanner),
-    vote_ticker: voteTickerForSnapshot(voteTicker)
+    vote_ticker: voteTickerForSnapshot(voteTicker),
+    law_toasts: lawToastsForSnapshot(lawToasts),
+    law_hints: lawHints
   };
 }
 
@@ -130,16 +140,8 @@ function broadcastMessage(message: Record<string, unknown>): void {
   for (const socket of clients) if (socket.readyState === socket.OPEN) socket.send(wire);
 }
 
-const refusalText: Record<string, string> = {
-  unsupported_trigger: "That trigger is not supported.",
-  unsupported_effect: "That effect is not supported.",
-  unsupported_part: "That beast part is not supported.",
-  too_vague: "Please make the law more specific.",
-  unsafe: "That law was refused for safety."
-};
-
-function showRefusal(status: keyof typeof refusalText): void {
-  broadcastMessage({ type: "notice", message: refusalText[status], kind: "refusal" });
+function showRefusal(status: RefusalStatus): void {
+  broadcastMessage({ type: "notice", message: refusalForStatus(status), kind: "refusal", duration_ms: 4000 });
 }
 
 function showNotice(message: string): void {
@@ -188,7 +190,7 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
     logDecision("law_proposal", { user: userName, user_id: userId, status: rule.status, compiler_path: compilerPath, text: lawText, message_id: messageId });
     if (rule.status !== "ok") {
       showRefusal(rule.status);
-      twitchRuntime?.sendChatReply(refusalText[rule.status]);
+      twitchRuntime?.sendChatReply(refusalForStatus(rule.status));
       return;
     }
     const proposalId = `twitch-proposal-${Date.now()}-${++proposalSequence}`;
@@ -246,11 +248,15 @@ function handleTwitchEvent(name: Parameters<typeof translateTwitchEvent>[0], pay
       return;
     }
   }
+  const actorName = eventActorName(name, payload);
   const result = streamerControls.paused
     ? { ignored: false, fired: [] as ReturnType<RuleEngine["handleEvent"]>["fired"] }
     : engine.handleEvent(internal);
   if (result.ignored) return;
-  for (const law of result.fired) triggerLawAction(law.action.type);
+  for (const law of result.fired) {
+    triggerLawAction(law.action.type);
+    lawToasts = pushLawToast(lawToasts, createLawToast(law, actorName, false));
+  }
   if (name === "chat" && chatDetails) {
     const { userId, userName, message, messageId } = chatDetails;
     if (/^!law\b|^(?:1|2|yes|no)$/i.test(message.trim())) {
@@ -365,8 +371,8 @@ app.post("/api/sandbox/propose", async (request, response) => {
     broadcastSound("vote_open");
     broadcastSnapshot();
     response.json({ ok: true, proposalId });
-  } catch (error) {
-    response.status(500).json({ error: error instanceof Error ? error.message : "Could not compile proposal." });
+  } catch {
+    response.status(500).json({ error: "Could not compile proposal." });
   }
 });
 
@@ -468,7 +474,10 @@ app.post("/api/sandbox/event", (request, response) => {
     fired.push(...result.fired);
   }
 
-  for (const law of fired) triggerLawAction(law.action.type, true);
+  for (const law of fired) {
+    triggerLawAction(law.action.type, true);
+    lawToasts = pushLawToast(lawToasts, createLawToast(law, undefined, true));
+  }
   broadcastEffect("sim_event", true);
   broadcastSnapshot();
   response.json({ ok: true, event: eventName, fired: fired.map((law) => law.id) });
@@ -493,7 +502,7 @@ setInterval(() => {
     const newLawWon = crisisOutcome.winner_choice === "proposed";
     lawBanner = createLawBannerPayload("crisis_resolved", crisisOutcome.winner, {
       headline: newLawWon ? "NEW LAW SURVIVES" : "EXISTING LAW SURVIVES",
-      relatedLawText: crisisOutcome.loser.raw_text,
+      relatedLaw: crisisOutcome.loser,
       relatedLawRelation: "overruled"
     });
     logDecision("crisis_ended", {
@@ -528,7 +537,7 @@ setInterval(() => {
       broadcastSound("crisis_start");
       lawBanner = createLawBannerPayload("passed", result.crisis.proposed, {
         headline: "LAW PASSED · CRISIS VOTE",
-        relatedLawText: result.crisis.existing.raw_text,
+        relatedLaw: result.crisis.existing,
         relatedLawRelation: "challenged"
       });
       console.info(`Compiler ${compilerLabel(pendingLaw.compilerPath)} handled ${result.crisis.proposed.id}`);
@@ -547,8 +556,8 @@ setInterval(() => {
 }, 200);
 
 server.listen(config.port, "127.0.0.1", () => {
-  console.log(`Constitution Beast sandbox is ready: http://localhost:${config.port}/sandbox.html`);
-  console.log(`Overlay browser source: http://localhost:${config.port}/overlay.html`);
+  console.log(`Beast Rules sandbox is ready: http://localhost:${config.port}/sandbox.html`);
+  console.log(`Beast Rules overlay browser source: http://localhost:${config.port}/overlay.html`);
   void obsSwitcher.start();
   void startTwitchRuntime({
     onEvent: handleTwitchEvent,

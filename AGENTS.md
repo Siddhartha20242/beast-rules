@@ -1,7 +1,7 @@
-# AGENTS.md — Constitution Beast
+# AGENTS.md — Beast Rules
 
 ## Mission
-A Twitch overlay where chat writes the laws of the stream and the laws are the creature. Viewers propose a law in plain English; Codex-class model compiles it to a schema-validated rule; chat votes; a passed law fires on Twitch events AND grows one visible part on an SVG beast. Persistent across streams.
+Beast Rules is a Twitch overlay where chat writes the laws of the stream and the laws are the creature. Viewers propose a law in plain English; a Codex-class model compiles it to a schema-validated rule; chat votes; a passed law fires on Twitch events AND grows one visible part on an SVG beast. Persistent across streams.
 
 ## Judging rules this project is built against (official)
 Stage One is pass/fail: fits the theme and reasonably applies Codex. Stage Two has four equally weighted criteria: Innovation/Idea, Potential Impact (useful or entertaining for streamers and communities), Technological implementation (how well built, how well Codex is used), Design (easy to use, fun to watch). Ties break on Innovation first, then Impact. Judging may include automated AI analysis, so the README and Devpost text must be complete, plain and self-explanatory. Max score is 40.

@@ -1,7 +1,7 @@
 # Devpost draft (edit the [brackets] after recording; delete anything not working)
 
 ## Project name
-Constitution Beast
+Beast Rules
 
 ## Tagline
 Chat writes the laws of the stream, and the laws are the creature.

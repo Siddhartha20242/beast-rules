@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Constitution Beast Overlay</title>
+  <title>Beast Rules — Overlay</title>
   <style>
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
     * { box-sizing: border-box; }
@@ -69,6 +69,14 @@
     #sound-hint { display:none; position:absolute; z-index:8; right:12px; top:12px; padding:6px 9px; border:1px solid #ffd166; border-radius:8px; background:#171d33e8; color:#ffe7a8; font-size:10px; font-weight:800; cursor:pointer; }
     #sound-hint.show { display:block; }
     #notice { display:none; position:absolute; z-index:7; left:50%; top:18px; transform:translateX(-50%); padding:12px 18px; border:1px solid #ffcc66; border-radius:10px; background:#24190de8; color:#ffe5b4; font-weight:700; }
+    #law-toasts { position:absolute; z-index:7; left:12px; top:14vh; display:grid; gap:8px; width:clamp(150px,25vw,310px); pointer-events:none; }
+    .law-toast { min-width:0; padding:9px 11px; border:1px solid #ffd166aa; border-radius:12px; background:#171d33ed; box-shadow:0 6px 18px #05071388; animation:toast-in .2s ease-out; }
+    .law-toast-head { display:flex; align-items:center; gap:6px; color:#ffd166; font-size:11px; font-weight:950; }
+    .law-toast-icon { font-size:15px; }
+    .law-toast-description { margin-top:4px; color:#f6f5ff; font-size:11px; font-weight:700; line-height:1.25; overflow-wrap:anywhere; }
+    .law-toast-actor { margin-top:4px; color:#b8c3e4; font-size:9px; font-weight:800; }
+    @keyframes toast-in { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
+    @media (max-width:560px) { #law-toasts { left:8px; width:clamp(140px,31vw,168px); top:12vh; gap:5px; } .law-toast { padding:7px 8px; } .law-toast-description { font-size:10px; } }
     #paused-badge { display:none; position:absolute; z-index:8; left:50%; top:74px; transform:translateX(-50%); max-width:calc(100vw - 24px); padding:7px 13px; border:2px solid #ffd166; border-radius:999px; background:#442d0df2; color:#ffe7a8; font-size:clamp(11px,1.4vw,16px); font-weight:950; letter-spacing:.08em; text-align:center; box-shadow:0 0 20px #ffd16655; }
     #paused-badge.show { display:block; }
     #crisis-banner { display:none; position:absolute; z-index:4; left:50%; bottom:clamp(150px,20vh,220px); transform:translateX(-50%); width:min(920px,calc(100vw - 24px)); max-height:clamp(132px,22vh,210px); padding:9px 12px; border:2px solid #ff6969; border-radius:16px; background:#341d28f2; box-shadow:0 0 32px #ff3d4b55; overflow:hidden; }
@@ -124,6 +132,7 @@
 </head>
 <body>
   <div id="notice"></div>
+  <div id="law-toasts" aria-live="polite"></div>
   <div id="paused-badge" aria-live="polite">PAUSED · Streamer controls are holding all laws</div>
   <section id="law-banner" aria-live="polite">
     <div id="law-banner-headline"></div>
@@ -141,7 +150,7 @@
     </div>
   </section>
   <div id="scene">
-    <div id="beast-wrap" aria-label="The evolving Constitution Beast">
+    <div id="beast-wrap" aria-label="The evolving Beast Rules creature">
       <svg id="beast" viewBox="0 0 500 500" role="img" aria-label="Flat SVG beast with five mutation zones">
         <defs>
           <linearGradient id="body-gradient" x1="0" y1="0" x2="0.9" y2="1"><stop id="body-stop-top" offset="0" stop-color="#8998c2"/><stop id="body-stop-mid" offset=".55" stop-color="#626d8f"/><stop id="body-stop-bottom" offset="1" stop-color="#424d70"/></linearGradient>
@@ -219,7 +228,7 @@
       <div id="vote-label"><span id="yes-label">YES 0</span><span id="vote-time"></span><span id="no-label">NO 0</span></div>
     </div>
     <div id="laws" class="panel" aria-live="polite"></div>
-    <div id="howto" class="panel">Type <strong>!law &lt;idea&gt;</strong></div>
+  <div id="howto" class="panel"><strong id="law-hint-text">Type !law &lt;idea&gt;</strong></div>
   </section>
   <script>
     const overlayColors = { red: "#ff5d68", orange: "#ff9f43", yellow: "#ffd166", green: "#63d995", cyan: "#45d5d0", blue: "#5c9dff", purple: "#b27aff", pink: "#ff7eb6" };
@@ -230,6 +239,10 @@
     let countdownTimer;
     let crisisCountdownTimer;
     let noticeTimer;
+    let refusalTimer;
+    let hintTimer;
+    let hintIndex = -1;
+    let lawToastTimer;
     let lawBannerTimer;
     let currentLawBannerId = "";
     let highlightedLawId = "";
@@ -554,6 +567,8 @@
 
     function render(state) {
       latestState = state;
+      renderLawToasts(state.law_toasts || []);
+      startHintRotation(state.law_hints || []);
       document.getElementById("paused-badge").classList.toggle("show", Boolean(state.paused));
       updateEvolution(state);
       const partMap = state.beast_parts || {};
@@ -584,7 +599,7 @@
         proposer.className = "law-proposer";
         const proposerName = typeof law.proposer_name === "string" && law.proposer_name !== "unknown" ? law.proposer_name : "";
         if (proposerName) proposer.textContent = ` by ${proposerName}`;
-        item.append(id, document.createTextNode(law.raw_text));
+        item.append(id, document.createTextNode(law.description));
         if (proposerName) item.append(proposer);
         item.append(compilerTag);
         laws.append(item);
@@ -596,8 +611,8 @@
       crisisBanner.classList.toggle("show", Boolean(crisis));
       if (crisis) {
         const totalVotes = Math.max(1, crisis.existing_votes + crisis.proposed_votes);
-        document.getElementById("crisis-existing-text").textContent = crisis.existing.raw_text;
-        document.getElementById("crisis-proposed-text").textContent = crisis.proposed.raw_text;
+        document.getElementById("crisis-existing-text").textContent = crisis.existing.description;
+        document.getElementById("crisis-proposed-text").textContent = crisis.proposed.description;
         renderCrisisPartPreview("crisis-existing-preview", crisis.existing.mutation.part_id, crisis.existing.mutation.color);
         renderCrisisPartPreview("crisis-proposed-preview", crisis.proposed.mutation.part_id, crisis.proposed.mutation.color);
         document.getElementById("crisis-existing-count").textContent = `Votes: ${crisis.existing_votes} · Type 1`;
@@ -637,6 +652,44 @@
         clearInterval(countdownTimer);
         document.getElementById("proposal-compiler").textContent = "";
       }
+    }
+
+    function renderLawToasts(toasts) {
+      const container = document.getElementById("law-toasts");
+      const now = Date.now();
+      const current = toasts.filter((toast) => toast.ends_at > now).slice(-2);
+      container.replaceChildren();
+      for (const toast of current) {
+        const card = document.createElement("div");
+        card.className = "law-toast";
+        const heading = document.createElement("div");
+        heading.className = "law-toast-head";
+        const icon = document.createElement("span");
+        icon.className = "law-toast-icon";
+        icon.textContent = "⚡";
+        const title = document.createElement("span");
+        title.textContent = `LAW ${toast.law_id} fired`;
+        heading.append(icon, title);
+        const description = document.createElement("div");
+        description.className = "law-toast-description";
+        description.textContent = toast.description;
+        const actor = document.createElement("div");
+        actor.className = "law-toast-actor";
+        actor.textContent = toast.simulated ? "SIM" : `triggered by ${toast.triggered_by || "Twitch"}`;
+        card.append(heading, description, actor);
+        container.append(card);
+      }
+      clearTimeout(lawToastTimer);
+      const nextExpiry = Math.min(...current.map((toast) => toast.ends_at));
+      if (Number.isFinite(nextExpiry)) lawToastTimer = setTimeout(() => renderLawToasts(latestState?.law_toasts || []), Math.max(0, nextExpiry - now));
+    }
+
+    function startHintRotation(hints) {
+      if (!Array.isArray(hints) || hints.length !== 8 || hintTimer) return;
+      hintTimer = setInterval(() => {
+        hintIndex = (hintIndex + 1) % hints.length;
+        document.getElementById("law-hint-text").textContent = `Try: !law ${hints[hintIndex]}`;
+      }, 6000);
     }
 
     function confetti() {
@@ -710,7 +763,7 @@
           notice.textContent = data.message;
           notice.style.display = "block";
           clearTimeout(noticeTimer);
-          noticeTimer = setTimeout(() => { notice.style.display = "none"; }, 4500);
+          noticeTimer = setTimeout(() => { notice.style.display = "none"; }, data.duration_ms === 4000 ? 4000 : 4500);
         }
         else if (data.type === "effect") {
           if (data.sim || data.effect === "sim_event") showSim();

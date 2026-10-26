@@ -1,6 +1,11 @@
-# Constitution Beast
+# Beast Rules
 
-Chat writes the laws of the stream, and the laws are the creature. Viewers propose rules, vote on them, and watch those rules shape a shared animated beast.
+Chat writes the laws of the stream, and the laws are the creature. Viewers propose rules, vote on them, and watch the beast evolve.
+
+**Screenshot placeholder:** `docs/images/banner.png`<br>
+**Law-pass GIF placeholder:** `docs/images/law-pass.gif`<br>
+Demo video: [link coming]<br>
+Devpost: [link coming]
 
 ## Try it in 60 seconds
 
@@ -8,114 +13,102 @@ Chat writes the laws of the stream, and the laws are the creature. Viewers propo
 npm install && npm run sandbox
 ```
 
-No Twitch credentials are needed for the local sandbox. Open [http://localhost:3000/sandbox.html](http://localhost:3000/sandbox.html); use [http://localhost:3000/overlay.html](http://localhost:3000/overlay.html) as the transparent OBS browser source. Ollama is optional; when it is unavailable, the parser handles eligible proposals.
+No credentials are needed. Open [localhost:3000/sandbox.html](http://localhost:3000/sandbox.html); the transparent OBS browser source is [localhost:3000/overlay.html](http://localhost:3000/overlay.html). Ollama is optional.
 
 ## Safety gate
+
+Viewer proposals are compiled into closed-schema rules. The original chat sentence is kept for server-side logs and persisted history only; the overlay and sandbox receive a canonical description assembled from validated trigger, action, part, and color enums. Refusal and error messages shown to viewers are fixed text, and displayed usernames are control-character-stripped, capped at 24 characters, and rendered as text.
 
 ```mermaid
 flowchart LR
   A[Chat input] --> B[Parser first]
-  B -->|ok or unsafe| G[Schema validation]
-  B -->|undecided / unsupported| C[Local model]
+  B -->|ok or unsafe| F[Schema validation]
+  B -->|undecided or unsupported| C[Local Ollama model]
   C --> D[Verifier]
-  D --> G
-  G --> E[Deterministic rule engine]
-  E --> F[Overlay]
+  D --> F
+  F --> E[Deterministic rule engine]
+  E --> G[Overlay]
 ```
 
-The model can only emit values from the rule schema; verified results are schema-validated before reaching the deterministic engine.
+The model can only emit values from the schema; verified model results pass schema validation before the deterministic engine handles them.
+
+## Example law
+
+Chat sends:
+
+```text
+when someone subs grow wings and shake the screen
+```
+
+The real TemplateCompiler produces this schema-valid rule:
+
+```json
+{
+  "status": "ok",
+  "trigger": {
+    "event_type": "channel.subscribe",
+    "threshold": 1
+  },
+  "action": {
+    "type": "screen_shake",
+    "intensity": "low"
+  },
+  "mutation": {
+    "part_id": "wings",
+    "color": "yellow"
+  }
+}
+```
+
+When the vote passes, the overlay shows the law-passed banner and pulses the wings; a subscription then triggers the screen shake.
 
 ## What works today
 
-- Template compiler maps supported triggers, effects, beast parts, colors, and thresholds into schema-validated rules.
-- Optional local Ollama compiler can rescue parser refusals; verified trigger, part, color, and effect checks reject inconsistent outputs.
-- Passed laws update persistent state, replace parts by zone through a constitutional crisis vote, and keep an overruled-law history.
-- The overlay renders the beast, live vote/crisis state, law-passed banners, part pulses, and the supported screen effects.
-- The sandbox simulates five viewers and follow, sub, raid, cheer, and chat-spike events without Twitch credentials.
-- Twurple EventSub WebSocket integration and chat command translation are implemented and covered by fixture tests; `/health` reports connection and subscription status.
+- Schema-validated template parsing, with 28/28 contract cases passing; optional local Ollama rescue uses a verifier and falls back safely.
+- Persistent proposals, voting, zone replacement, constitutional crisis votes, streamer pause/resume/reset/veto controls, and overlay snapshots.
+- Transparent SVG beast overlay with five evolution tiers, all 15 parts, law-passed and crisis-resolution banners, proposer credits, and a live vote ticker.
+- Synthesized Web Audio cues (no audio files), plus sandbox crowd simulation with adjustable yes bias and direct buttons for the four overlay effects.
+- Twitch EventSub WebSocket integration for chat, follow, subscription, gift, cheer, raid, and hype-train events; chat command translation and fixtures are tested. `/health` reports service state.
+- OBS scene actions mapped to server-configured scene names; the adapter is tested with mocks only. Live OBS switching has not been verified.
 
 ## Measured compile accuracy
 
-The TemplateCompiler passes **28/28** contract cases in `tests/laws.json`. The eval compares only fields present in each case's expected result.
+| Set | Parser | AutoCompiler |
+| --- | ---: | ---: |
+| Contract (`tests/laws.json`) | 28/28 | — |
+| Heldout development set | 18/30 | 24/30, later 25/30 |
+| Heldout2 run 1 | 23/30 | 24/30 |
+| Heldout2 run 2 | 23/30 | 25/30 |
 
-`tests/heldout.json` became a development set after parser fixes. Its logged initial run was parser **18/30 (60.0%)**, AutoCompiler **24/30 (80.0%)**. A later verbose run recorded parser **18/30 (60.0%)**, AutoCompiler **25/30 (83.3%)**.
-
-The separate `tests/heldout2.json` evaluation was run twice without tuning between runs:
-
-- **Run 1:** TemplateCompiler **23/30 (76.7%)**; AutoCompiler **24/30 (80.0%)**.
-- **Run 2:** TemplateCompiler **23/30 (76.7%)**; AutoCompiler **25/30 (83.3%)**.
-
-AutoCompiler's result varied because local model rescue can differ between runs. These small sets measure only their included phrasings, not general language understanding.
+These small, fixed sets are not a measure of general language understanding, and Ollama results can vary between runs.
 
 ## How Codex built this
 
-The implementation history and check results are in [docs/CODEX_LOG.md](docs/CODEX_LOG.md). Codex helped build the project; runtime law compilation uses the local parser and optional local Ollama model, not Codex.
+This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **189 tests across 13 files**. The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
 
-## Twitch setup
+Three examples of problems found and resolved: [the parser initially emitted `eventType` instead of schema-required `event_type`](docs/CODEX_LOG.md#roadmap-step-2--templatecompiler-only); [npm's shared cache rejected writes, so installation was retried with a temporary cache](docs/CODEX_LOG.md#streamer-controls-and-obs-scene-switching); and [the preview initially missed its first frame, so it was rerun from the start and all 15 parts were verified](docs/CODEX_LOG.md#sandbox-crowd-bias-reliable-part-preview-and-legacy-proposer-labels). **No runtime model call goes through Codex:** law compilation uses the local parser and, when configured, a local Ollama server.
 
-### Create and authorize the Twitch app
+## Twitch setup and live test
 
-1. Create an app in the [Twitch Developer Console](https://dev.twitch.tv/console/apps). Choose **Confidential** and **Chat Bot**.
-2. Set its redirect URL to `http://localhost:3001/auth/callback`.
-3. Put the client ID and client secret in `.env` as `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`; set `TWITCH_REDIRECT_URI=http://localhost:3001/auth/callback`.
-4. Run `npm run twitch:auth` and authorize while logged in as the broadcaster. The refreshable token is stored in ignored `data/twitch-token.json`.
-5. Start the app with `npm run sandbox`. Set `TWITCH_BROADCASTER_ID` only to override the ID inferred from the authorized token.
+1. Create a Twitch developer app. The app category does not matter; selecting “Chat Bot” is not required. Set the redirect URL to `http://localhost:3001/auth/callback`.
+2. Put the client ID and secret in `.env` as `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`; set `TWITCH_REDIRECT_URI=http://localhost:3001/auth/callback`.
+3. Run `npm run twitch:auth` and authorize as the broadcaster. The token is stored in ignored `data/twitch-token.json`.
+4. Start the server with `npm run sandbox` and check `http://localhost:3000/health`. Confirm Twitch is connected and EventSub subscriptions are active.
+5. In the broadcaster's chat, send `!law when someone follows grow blue horns`, then vote `yes`. Broadcaster-authored chat is processed, so one account can test proposal and vote commands.
+6. From a second account, follow the channel and confirm the EventSub notification and matching law effect. A broadcaster cannot follow their own channel.
 
-Required broadcaster scopes:
+Required broadcaster scopes: `user:read:chat`, `moderator:read:followers`, `channel:read:subscriptions`, `bits:read`, and `channel:read:hype_train`. Raids require no OAuth scope. `user:write:chat` is optional and only needed with `CHAT_REPLIES=on`.
 
-- `user:read:chat` — chat messages and chatter identity.
-- `moderator:read:followers` — channel follow v2.
-- `channel:read:subscriptions` — subscriptions and gifted subscriptions.
-- `bits:read` — cheers.
-- `channel:read:hype_train` — hype train begin v2.
-- Raids require no OAuth scope.
-- `user:write:chat` is optional and only needed when `CHAT_REPLIES=on`.
+For local EventSub mocks, run `twitch event websocket start-server --port 8080`, set `TWURPLE_MOCK_API_PORT=8080` (or `TWITCH_EVENTSUB_WS_URL`), then trigger events with `twitch event trigger channel.follow -T websocket --session SESSION_ID -u BROADCASTER_ID`. The Twitch CLI's available payload options vary by version.
 
-### Test live on Twitch
+### OBS scene setup
 
-1. Start the server with `npm run sandbox` and keep the terminal open for EventSub and decision logs.
-2. Open `http://localhost:3000/health`. Check `twitchConnected`, the broadcaster ID, and that the expected subscription statuses are `active`.
-3. From the broadcaster account's own chat, type `!law when someone follows grow blue horns`. Broadcaster-authored chat messages are processed, so one account can submit a law and vote.
-4. Type `yes` or `1` in chat to vote. Check the overlay banner and terminal decision logs after the vote passes.
-5. From a second account, follow the channel and confirm the follow notification and law effect. The broadcaster cannot follow their own channel.
-
-Troubleshooting:
-
-| Symptom | Check |
-| --- | --- |
-| Redirect mismatch | The Twitch app redirect and `TWITCH_REDIRECT_URI` must both exactly match `http://localhost:3001/auth/callback`; then rerun `npm run twitch:auth`. |
-| Missing scope | Add the listed scope to the app authorization and rerun `npm run twitch:auth` to replace the saved token. |
-| Token expired | Reauthorize with `npm run twitch:auth` while logged in as the broadcaster. |
-| Subscription failed | Inspect `/health` statuses and terminal messages; verify broadcaster ID, token account, and required scopes. |
-
-### Twitch CLI mock events
-
-For local EventSub mocks, install the [Twitch CLI](https://dev.twitch.tv/docs/cli/) and run:
-
-```sh
-twitch event websocket start-server --port 8080
-```
-
-Set `TWURPLE_MOCK_API_PORT=8080` for the app (or set `TWITCH_EVENTSUB_WS_URL` to another mock WebSocket URL). Start `npm run sandbox` in another terminal and use the current session ID shown by the app:
-
-```sh
-twitch event trigger channel.follow -T websocket --session SESSION_ID -u BROADCASTER_ID
-twitch event trigger channel.chat.message -T websocket --session SESSION_ID -u BROADCASTER_ID
-```
-
-Other registered event types include `channel.subscribe`, `channel.subscription.gift`, `channel.cheer`, `channel.raid`, and `channel.hype_train.begin`. CLI payload options vary by CLI version; check `twitch event trigger --help`.
+In OBS, enable the WebSocket server in **Tools → WebSocket Server Settings** and set a password. Configure `OBS_WS_URL`, `OBS_WS_PASSWORD`, and exact scene names in `OBS_SCENE_1`, `OBS_SCENE_2`, and `OBS_SCENE_3`; `SCENE_RETURN_SECONDS` defaults to 6. Chat can choose only the three numbered actions, never a scene name. OBS switching is mock-tested, not live-verified.
 
 ## Known limitations
 
-- The rule language is intentionally narrow. Unsupported or ambiguous wording may be refused or parsed as a safe default; the held-out scores above show this limitation.
-- Ollama must be installed and running locally for model rescue. A timed-out or unverifiable response falls back to the parser result.
-- The live Twitch setup requires a developer app, broadcaster authorization, and the listed scopes. Follow tests require a second account.
-- The `demo` npm script is a placeholder; a scripted demo replay is not implemented.
-
-## Streamer controls
-
-The broadcaster can use `!beast pause` and `!beast resume` in chat. While paused, law triggers and new proposals are ignored; the paused state is saved across restarts. The broadcaster or a moderator can use `!beast reset`, then send `!beast reset confirm` within 15 seconds from the same account to clear all active and historical laws. `!beast veto` cancels the current proposal vote or constitutional crisis. Normal viewers cannot use these commands.
-
-## OBS scene switching
-
-Constitution Beast uses OBS WebSocket to handle the existing `obs_scene_1`, `obs_scene_2`, and `obs_scene_3` law actions. In OBS, open **Tools → WebSocket Server Settings**, enable the WebSocket server, and set a password. Put the server address, password, and exact scene names in `.env` as `OBS_WS_URL`, `OBS_WS_PASSWORD`, `OBS_SCENE_1`, `OBS_SCENE_2`, and `OBS_SCENE_3`. Set `SCENE_RETURN_SECONDS` to control how long the selected scene remains active (default 6 seconds). Leave a scene mapping empty to disable that action. Chat rules can select only the numbered actions; they cannot supply OBS scene names. The sandbox and `/health` report whether the OBS connection is active.
+- The law language is narrow; unsupported or ambiguous phrasing may be refused or safely defaulted. The held-out scores above show its limits.
+- Ollama must be running locally for model rescue, and rescue results vary. Ollama is optional; the parser remains available without it.
+- Twitch requires a developer app, broadcaster authorization, and the listed scopes. Follow testing needs another account.
+- OBS scene actions require a configured, reachable OBS WebSocket server and mapped scene names; only mock behavior has been verified.
+- Screenshot, GIF, demo-video, and Devpost links above are placeholders, not implemented artifacts.

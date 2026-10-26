@@ -17,4 +17,8 @@ describe("vote ticker payload", () => {
     expect(old.username).toBe("alice<script>");
     expect(voteTickerForSnapshot([old], 4100)).toEqual([]);
   });
+
+  it("caps displayed usernames at 24 characters", () => {
+    expect(createVoteTickerEntry("viewer_with_a_very_long_name", "yes").username).toHaveLength(24);
+  });
 });

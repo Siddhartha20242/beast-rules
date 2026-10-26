@@ -1,4 +1,4 @@
-# DEMO.md — 3-minute video plan (and what is real vs simulated)
+# Beast Rules demo — 3-minute video plan (and what is real vs simulated)
 
 Rule: label every simulated event on screen with a small "SIM" tag. Real events get no tag. Vote window is set to 8s for recording (`VOTE_SECONDS=8`).
 
