@@ -50,7 +50,7 @@ describe("health handler", () => {
     await handler({} as never, response as never, (() => undefined) as never);
 
     expect(fetchedUrl).toBe("http://localhost:11434/api/tags");
-    expect(result).toEqual({ ...state, ollamaReachable: true });
+    expect(result).toEqual({ ...state, twitchReconnecting: false, lastDisconnectAt: null, reconnectAttempts: 0, ollamaReachable: true });
     expect(JSON.stringify(result)).not.toMatch(/token|secret|authorization/i);
   });
 

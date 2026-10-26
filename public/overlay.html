@@ -96,6 +96,10 @@
     @media (max-height: 650px) { #crisis-banner { padding:5px 8px; bottom:145px; max-height:128px; } #crisis-countdown { margin:1px 0 3px; font-size:11px; } .crisis-law { padding:4px 6px; } .crisis-part-row { min-height:30px; margin-bottom:2px; } .crisis-part-preview { width:30px; height:30px; flex-basis:30px; } .crisis-track { margin-top:3px; } .crisis-count { margin-top:2px; } }
     #sim-tag { position: absolute; right: 22px; top: 20px; padding: 5px 9px; border-radius: 6px; background: #ffd166; color: #29233a; font-size: 10px; font-weight: 900; letter-spacing: .08em; opacity: 0; transition: opacity .2s; }
     #sim-tag.visible { opacity: 1; }
+    #twitch-dot { position: absolute; left: 18px; top: 18px; z-index: 4; display: none; align-items: center; gap: 7px; padding: 5px 10px; border-radius: 999px; background: rgba(20, 22, 47, .72); color: #cfd3f5; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+    #twitch-dot.visible { display: inline-flex; }
+    #twitch-dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #f59e8b; animation: twitch-dot-pulse 1.2s ease-in-out infinite; }
+    @keyframes twitch-dot-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
     #part-preview-label { position:absolute; z-index:3; top:8px; left:50%; transform:translateX(-50%); display:none; max-width:calc(100vw - 24px); padding:5px 9px; border:1px solid #aeb8da66; border-radius:8px; background:#171d33e8; color:#f2e8bd; font-size:10px; font-weight:850; letter-spacing:.05em; white-space:nowrap; }
     #part-preview-label.show { display:block; }
     #flash { position: fixed; inset: 0; pointer-events: none; background: #fff; opacity: 0; }
@@ -217,6 +221,7 @@
     </div>
   </div>
   <div id="sim-tag">SIM</div>
+  <div id="twitch-dot" role="status">Twitch reconnecting</div>
   <div id="part-preview-label" aria-live="polite"></div>
   <button id="sound-hint" type="button">Click to enable sound</button>
   <div id="flash"></div>
@@ -252,6 +257,22 @@
     let latestState;
     let lastEvolutionTier;
     let partPreviewTimer;
+    // Small "Twitch reconnecting" dot for the streamer's own browser tab. Hidden in OBS with ?obs=1.
+    (function watchTwitchStatus() {
+      if (new URLSearchParams(location.search).get("obs") === "1") return;
+      const dot = document.getElementById("twitch-dot");
+      async function poll() {
+        try {
+          const status = await (await fetch("/api/twitch-status")).json();
+          dot.classList.toggle("visible", Boolean(status.configured && !status.connected));
+        } catch {
+          dot.classList.remove("visible");
+        }
+      }
+      void poll();
+      setInterval(() => void poll(), 5000);
+    })();
+
     let audioContext;
     let masterGain;
     const soundMode = new URLSearchParams(location.search).get("sound");

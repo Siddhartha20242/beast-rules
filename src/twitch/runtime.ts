@@ -7,6 +7,7 @@ import { config } from "../config.js";
 import type { HealthSubscription } from "../health.js";
 import { formatEventSubLogLine } from "./logging.js";
 import type { TwitchEventName } from "./events.js";
+import { ReconnectSupervisor, type ConnectionStatus } from "./resilience.js";
 
 const tokenPath = resolve("data/twitch-token.json");
 const requiredScopes = ["user:read:chat", "moderator:read:followers", "channel:read:subscriptions", "bits:read", "channel:read:hype_train"];
@@ -16,6 +17,7 @@ export interface TwitchRuntimeOptions {
   onStatus?: (message: string) => void;
   onConnectionChange?: (connected: boolean, broadcasterId: string) => void;
   onSubscriptionsChange?: (subscriptions: HealthSubscription[]) => void;
+  onConnectionStatus?: (status: ConnectionStatus) => void;
 }
 
 export interface TwitchRuntime {
@@ -24,6 +26,7 @@ export interface TwitchRuntime {
   readonly broadcasterId: string;
   readonly isConnected: boolean;
   getSubscriptions: () => HealthSubscription[];
+  getConnectionStatus: () => ConnectionStatus;
 }
 
 export async function startTwitchRuntime(options: TwitchRuntimeOptions): Promise<TwitchRuntime | undefined> {
@@ -79,8 +82,20 @@ export async function startTwitchRuntime(options: TwitchRuntimeOptions): Promise
     const record = subscriptions.find((item) => item.handle === subscription);
     if (record) { record.status = `revoked:${status}`; publishSubscriptions(); }
   });
+  const supervisor = new ReconnectSupervisor({
+    isConnected: () => connected,
+    restart: () => {
+      for (const item of subscriptions) if (item.status === "active") item.status = "reconnecting";
+      publishSubscriptions();
+      listener.stop();
+      listener.start();
+    },
+    log: (message) => options.onStatus?.(message),
+    ...(options.onConnectionStatus ? { onChange: options.onConnectionStatus } : {})
+  });
   listener.onUserSocketReady((userId) => {
     connected = true;
+    supervisor.notifyConnected();
     options.onConnectionChange?.(true, broadcasterId);
     options.onStatus?.(`EventSub WebSocket connected for broadcaster ${broadcasterId}.`);
     void userId;
@@ -89,8 +104,9 @@ export async function startTwitchRuntime(options: TwitchRuntimeOptions): Promise
     connected = false;
     for (const item of subscriptions) if (item.status === "active") item.status = "reconnecting";
     publishSubscriptions();
+    supervisor.notifyDisconnected();
     options.onConnectionChange?.(false, broadcasterId);
-    options.onStatus?.(error ? "EventSub WebSocket disconnected unexpectedly." : "EventSub WebSocket disconnected.");
+    options.onStatus?.(error ? "EventSub WebSocket disconnected unexpectedly; reconnecting." : "EventSub WebSocket disconnected; reconnecting.");
   });
   const on = (name: TwitchEventName) => (event: unknown) => {
     if (config.logEvents === "on") console.info(formatEventSubLogLine(name, event));
@@ -104,7 +120,13 @@ export async function startTwitchRuntime(options: TwitchRuntimeOptions): Promise
   register("channel.raid", listener.onChannelRaidTo(broadcasterId, on("raid")));
   register("channel.hype_train.begin", listener.onChannelHypeTrainBeginV2(broadcasterId, on("hype_train")));
   publishSubscriptions();
-  listener.start();
+  // Supervise the very first connection too: if it never becomes ready, the supervisor restarts it.
+  supervisor.watch();
+  try {
+    listener.start();
+  } catch (error) {
+    options.onStatus?.(`EventSub could not start yet and will be retried: ${error instanceof Error ? error.message : "unknown error"}`);
+  }
   options.onStatus?.("Subscribed to the broadcaster's own chat messages; broadcaster !law commands and votes are processed.");
 
   const sentAt: number[] = [];
@@ -136,10 +158,11 @@ export async function startTwitchRuntime(options: TwitchRuntimeOptions): Promise
 
   options.onStatus?.(`Twitch EventSub starting for broadcaster ${broadcasterId}.`);
   return {
-    stop: () => listener.stop(),
+    stop: () => { supervisor.stop(); listener.stop(); },
     get broadcasterId() { return broadcasterId; },
     get isConnected() { return connected; },
     getSubscriptions,
+    getConnectionStatus: () => supervisor.status(),
     sendChatReply: (message) => {
       if (config.chatReplies !== "on") return;
       if (queue.length < 25) queue.push(message.slice(0, 500));

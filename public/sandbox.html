@@ -188,7 +188,9 @@
         const health = await response.json();
         label.textContent = health.twitchConnected && health.broadcasterId
           ? `Twitch: connected as ${health.broadcasterId}`
-          : "Twitch: not connected";
+          : health.twitchReconnecting
+            ? `Twitch: reconnecting… (attempt ${health.reconnectAttempts})`
+            : "Twitch: not connected";
         document.getElementById("obs-connection").textContent = health.obsConnected ? "OBS: connected" : "OBS: not connected";
       } catch {
         label.textContent = "Twitch: not connected";

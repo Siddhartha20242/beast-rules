@@ -1,0 +1,130 @@
+## Inspiration
+
+I kept watching chats do the same thing: vote on something, see it happen, and forget it a minute later. Nothing sticks. I wanted a stream where chat leaves marks that stay.
+
+Then I remembered Nomic, a game where changing the rules is the game. What if chat could write the rules of the stream, and what if you could see every rule as a body part on a creature? That became the whole project. A law passes, the beast grows something. Look at the beast and you're reading the channel's laws.
+
+I'm building this alone and I have no budget, so two rules shaped everything: it has to work with five people in chat, not five thousand, and it can't cost anything to run.
+
+(I also renamed it halfway through. It started as "Constitution Beast," which sounded like something a chatbot would name a project. Beast Rules sounds like a thing a person would say.)
+
+## What it does
+
+Chat types a law in plain English, chat votes on it, and if it passes it starts firing on real Twitch events and grows a part on a beast in the stream overlay.
+
+Example: someone types `!law when someone subs grow wings and shake the screen`. The compiler turns it into this rule, and nothing else:
+
+| Field | Value |
+|---|---|
+| trigger | channel.subscribe (threshold 1) |
+| action | screen_shake (low) |
+| mutation | wings (yellow) |
+| zone | back |
+
+Chat votes. If it passes, wings appear on the beast with a banner that shows the law next to the part it made. From then on, every sub shakes the screen, and a small toast says which law fired and who triggered it.
+
+The beast has five body zones: head, torso, back, limbs and aura. If a new law wants a zone that's already taken, we get a constitutional crisis. Chat has a short vote on which of the two laws survives. The beast and its laws are saved between streams, and it grows through levels as the channel passes more laws.
+
+What a streamer controls: `!beast pause`, `!beast resume`, `!beast veto` and `!beast reset`, for the broadcaster and mods.
+
+You can try it with no Twitch account at all: `npm install && npm run sandbox` opens a sandbox with fake viewers.
+
+## How we built it
+
+I built it with OpenAI Codex, in one thread, from a written spec. Before the first prompt I had an AGENTS.md with the rules, a JSON Schema describing every valid law, and a 28-case test file that every compiler has to pass. Then I fed Codex one small step at a time. Each step ended with tests, a build and a lint run. It's at 210 tests now, and the whole log, mistakes included, is in docs/CODEX_LOG.md.
+
+I used ChatGPT, Perplexity, DeepSeek and Claude for planning and for arguing with me about the idea. Codex wrote the code, with one exception: the network-resilience fix near the end (described below) was written by Claude, and the log says so.
+
+How a law travels:
+
+| Stage | What happens | Where |
+|---|---|---|
+| Twitch | EventSub over WebSocket: chat, follows, subs, gifts, cheers, raids, hype trains. No public URL needed. | src/twitch |
+| Intake | Drop duplicates by message_id, drop events older than ten minutes, parse commands, per-viewer cooldown | src/twitch, src/voting.ts |
+| Compiler | A deterministic parser goes first. Only if it can't decide does a local model try (gemma3:4b through Ollama, 5 second timeout, never blocks anything). | src/compiler |
+| Verifier | Accepts the model's answer only if the trigger, part, color and effect actually appear in the viewer's sentence | src/compiler/verify.ts |
+| Schema check | Enum-only JSON Schema. Anything else gets a fixed refusal. | schema/rule.schema.json |
+| Rule engine | Vote, zone replacement, crisis, firing laws on events, saving to disk | src/engine.ts |
+| Overlay | OBS browser source: beast, banner, toasts, vote ticker, sound | public/overlay.html |
+
+(The architecture image in the gallery shows the same flow.)
+
+The Twitch pieces:
+
+| Event | Scope needed | What it does here |
+|---|---|---|
+| channel.chat.message | user:read:chat | !law, yes/no, 1/2 votes, chat-activity laws |
+| channel.follow (v2) | moderator:read:followers | fires follow laws |
+| channel.subscribe, channel.subscription.gift | channel:read:subscriptions | fires sub laws |
+| channel.cheer | bits:read | fires cheer laws |
+| channel.raid | none | fires raid laws |
+| channel.hype_train.begin | channel:read:hype_train | fires hype train laws |
+
+## Challenges we ran into
+
+My first idea was a different project. Chat would vibe-code the overlay live, with Codex running during the stream. It didn't survive a close look: strangers' code running on a streamer's machine, a minute of waiting per request, and a free quota that would drain fast. So the laws became typed rules instead.
+
+The local model was bad, and I only know because I measured it. On laws it hadn't seen, gemma3:4b was right about 22% of the time with my first prompt. Adding worked examples got it to 44%. That's when I flipped the design: parser first, model as a rescue, a verifier in the middle. The verifier earned its place right away. It caught the model turning "dance" into "roar", an effect nobody asked for.
+
+| Measured on laws I hadn't tuned for | Result |
+|---|---|
+| Local model alone, first prompt | about 22% (18 cases) |
+| Local model alone, with worked examples | about 44% (18 cases) |
+| Parser alone | 76.7% (30 phrasings, two runs) |
+| Parser + verified model rescue | 80% to 83% (varies run to run) |
+| The 28 contract cases | 28 of 28 |
+
+Codex couldn't open a port inside its sandbox, so for a while it built an overlay it had never seen. When I finally looked, the "wings" were four yellow leaves, and the shell was hiding behind the body. It took a couple of rounds with screenshots to fix.
+
+Codex's early mistakes were small but real. The first parser output `eventType` where the schema wants `event_type`, so the very first tests failed. npm's cache rejected writes in its sandbox, and Codex worked around it with a temporary cache. All of it is in the log.
+
+A safety hole I found late: the overlay was showing the viewer's raw sentence, so someone could type `when someone subs grow wings` plus anything offensive. Now the overlay never receives the raw text at all, only a description made from validated values, and there are tests for it.
+
+Late in testing, a short network drop timed out Twitch's connection and crashed the whole server, because one error event from the WebSocket library had no listener. I fixed that with a guard that contains only network-layer errors (bugs in my own code still crash loudly), plus a supervisor that restarts the Twitch listener if it stays down. To test it, I froze the running server for 40 seconds, like a laptop going to sleep. It stayed up, reconnected by itself, and all seven subscriptions came back. That fix is the one piece Claude wrote instead of Codex, and the log says so.
+
+My first real Twitch test failed by a single second. Real chat reached the server, the law was proposed, and then I typed "yes" one second after the vote closed. The server ignored me, correctly. Also, Twitch wanted two-factor authentication before I could register an app, and my phone number didn't work at first.
+
+| Risk | What stops it |
+|---|---|
+| Offensive words typed next to a valid law | The overlay never receives the viewer's raw text |
+| A model inventing something | Enum-only schema, so it can only pick listed values |
+| A model picking the wrong thing | The verifier checks it against the sentence |
+| Bans, timeouts, doxxing requests | Refused as "unsafe" before anything runs |
+| Spam | One proposal at a time, per-viewer cooldown |
+| Twitch sending an event twice | Dedupe by message_id |
+| Hitting chat send limits | Feedback goes on the overlay; chat replies are off by default |
+| A bad take mid-stream | Streamer can pause, veto or reset from chat |
+
+## Accomplishments that we're proud of
+
+It works against real Twitch chat through real EventSub, not just mocks. Subs, raids and cheers can't be triggered on demand, so in the video those are simulated and labeled SIM.
+
+It's honest about how well the compiler really works. I measured it on phrasings I hadn't tuned for, kept the failures, and put the numbers in the README instead of only the flattering ones.
+
+The first thing you see when a law passes is the law next to the part it created, in one banner. I wanted someone who's never heard of the project to get it in a second.
+
+And it costs nothing. No paid API, no server, a local model on a laptop.
+
+## What we learned
+
+The Twitch docs saved me from several mistakes I would otherwise have made.
+
+| What the docs said | What I did about it |
+|---|---|
+| EventSub delivers at least once, and a repeat has the same message ID | Dedupe by message_id, ignore anything older than ten minutes |
+| EventSub is the preferred way to read chat, IRC is legacy | Used the chat message event instead of IRC |
+| Chat sending is limited to 20 messages per 30 seconds and one per second per channel, and breaking it means the bot is ignored for an hour | Vote status and refusals go on the overlay; chat replies are off by default and capped |
+| Each event lists the scope it needs; follow v2 needs moderator:read:followers, raids need none | Requested exactly those five scopes and nothing more |
+| WebSocket transport needs no public callback | The whole thing runs on the streamer's machine with no tunnel |
+| The Twitch CLI can send mock events | Tested follows, subs and cheers I can't trigger myself |
+
+The other thing I learned: measure the model before you trust it, and put the parts that can hurt you in plain code. The thing I was most sure would work (a small local model reading chat) was the worst part, and measuring it is the only reason I know.
+
+## What's next for Beast Rules
+
+- A numbered ballot, so viewers can type 1, 2 or 3 on suggested laws instead of writing their own
+- More body zones and parts, so a long stream doesn't run out of things to grow
+- Testing OBS scene switching on a real stream (it's only tested with mocks so far)
+- A setup that doesn't need a terminal, for streamers who've never opened one
+- A stronger local model and more phrasings the parser understands
+- Beasts that meet when two streamers raid each other

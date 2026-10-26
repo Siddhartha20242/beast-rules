@@ -14,6 +14,7 @@ import { VotingManager, type VoteChoice } from "./voting.js";
 import { chatMessageDetails, eventActorName, translateTwitchEvent } from "./twitch/events.js";
 import { hasModeratorBadge, parseStreamerCommand, streamerRole, StreamerControlState } from "./twitch/streamer-controls.js";
 import { startTwitchRuntime, type TwitchRuntime } from "./twitch/runtime.js";
+import { installProcessGuards, type ConnectionStatus } from "./twitch/resilience.js";
 import { formatDecisionLogLine } from "./twitch/logging.js";
 import { createLawBannerPayload, lawBannerForSnapshot, type LawBannerPayload } from "./law-banner.js";
 import { createVoteTickerEntry, voteTickerForSnapshot, type VoteTickerChoice, type VoteTickerEntry } from "./vote-ticker.js";
@@ -47,6 +48,8 @@ let pendingLaw: { id: string; text: string; proposerId: string; proposerName: st
 let lastConflict: ReturnType<RuleEngine["add"]>["conflict"];
 let twitchRuntime: TwitchRuntime | undefined;
 let twitchConnected = false;
+let twitchStatus: ConnectionStatus = { connected: false, reconnecting: false, lastDisconnectAt: null, reconnectAttempts: 0 };
+const twitchConfigured = Boolean(config.twitchClientId && config.twitchClientSecret);
 let twitchBroadcasterId: string | null = config.twitchBroadcasterId || null;
 let eventSubSubscriptions: HealthSubscription[] = [];
 let lawBanner: LawBannerPayload | undefined;
@@ -326,8 +329,14 @@ sockets.on("connection", (socket) => {
 
 app.get("/", (_request, response) => response.sendFile(resolve("public/sandbox.html")));
 app.get("/api/state", (_request, response) => response.json(makeSnapshot()));
+app.get("/api/twitch-status", (_request, response) => {
+  response.json({ configured: twitchConfigured && (twitchRuntime !== undefined || twitchStatus.reconnecting), connected: twitchConnected, reconnecting: twitchStatus.reconnecting, reconnectAttempts: twitchStatus.reconnectAttempts });
+});
 app.get("/health", createHealthHandler(() => ({
   twitchConnected,
+  twitchReconnecting: twitchStatus.reconnecting,
+  lastDisconnectAt: twitchStatus.lastDisconnectAt,
+  reconnectAttempts: twitchStatus.reconnectAttempts,
   broadcasterId: twitchBroadcasterId,
   subscriptions: eventSubSubscriptions,
   compilerMode: config.compiler,
@@ -555,15 +564,18 @@ setInterval(() => {
   twitchRuntime?.sendChatReply(outcome.status === "passed" ? "The law passed." : "The law did not pass.");
 }, 200);
 
-server.listen(config.port, "127.0.0.1", () => {
-  console.log(`Beast Rules sandbox is ready: http://localhost:${config.port}/sandbox.html`);
-  console.log(`Beast Rules overlay browser source: http://localhost:${config.port}/overlay.html`);
-  void obsSwitcher.start();
-  void startTwitchRuntime({
+// A network hiccup in the Twitch, OBS or WebSocket layer must never take the overlay down.
+// Errors from this project's own code still exit loudly.
+installProcessGuards({ log: (message) => console.error(message), exit: (code) => process.exit(code) });
+
+const twitchBootDelaysMs = [5_000, 10_000, 20_000, 30_000];
+const bootTwitch = (attempt = 0): void => {
+  startTwitchRuntime({
     onEvent: handleTwitchEvent,
     onStatus: (message) => console.log(message),
     onConnectionChange: (connected, id) => { twitchConnected = connected; twitchBroadcasterId = id; },
-    onSubscriptionsChange: (subscriptions) => { eventSubSubscriptions = subscriptions; }
+    onSubscriptionsChange: (subscriptions) => { eventSubSubscriptions = subscriptions; },
+    onConnectionStatus: (status) => { twitchStatus = status; }
   })
     .then((runtime) => {
       twitchRuntime = runtime;
@@ -571,7 +583,20 @@ server.listen(config.port, "127.0.0.1", () => {
         twitchBroadcasterId = runtime.broadcasterId;
         twitchConnected = runtime.isConnected;
         eventSubSubscriptions = runtime.getSubscriptions();
+        twitchStatus = runtime.getConnectionStatus();
       }
     })
-    .catch(() => console.error("Could not start Twitch EventSub. Check credentials, token scopes, and broadcaster configuration."));
+    .catch(() => {
+      const delay = twitchBootDelaysMs[Math.min(attempt, twitchBootDelaysMs.length - 1)] ?? 30_000;
+      twitchStatus = { ...twitchStatus, reconnecting: true, reconnectAttempts: attempt + 1 };
+      console.error(`Could not start Twitch EventSub (attempt ${attempt + 1}). Check credentials, token scopes and the network; retrying in ${delay / 1000}s.`);
+      setTimeout(() => bootTwitch(attempt + 1), delay);
+    });
+};
+
+server.listen(config.port, "127.0.0.1", () => {
+  console.log(`Beast Rules sandbox is ready: http://localhost:${config.port}/sandbox.html`);
+  console.log(`Beast Rules overlay browser source: http://localhost:${config.port}/overlay.html`);
+  void obsSwitcher.start();
+  bootTwitch();
 });

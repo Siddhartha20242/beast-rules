@@ -84,7 +84,7 @@ These small, fixed sets are not a measure of general language understanding, and
 
 ## How Codex built this
 
-This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **189 tests across 13 files**. The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
+This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **210 tests across 16 files** (the last stability fix was written by Claude, not Codex; see the log). The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
 
 Three examples of problems found and resolved: [the parser initially emitted `eventType` instead of schema-required `event_type`](docs/CODEX_LOG.md#roadmap-step-2--templatecompiler-only); [npm's shared cache rejected writes, so installation was retried with a temporary cache](docs/CODEX_LOG.md#streamer-controls-and-obs-scene-switching); and [the preview initially missed its first frame, so it was rerun from the start and all 15 parts were verified](docs/CODEX_LOG.md#sandbox-crowd-bias-reliable-part-preview-and-legacy-proposer-labels). **No runtime model call goes through Codex:** law compilation uses the local parser and, when configured, a local Ollama server.
 
@@ -104,6 +104,17 @@ For local EventSub mocks, run `twitch event websocket start-server --port 8080`,
 ### OBS scene setup
 
 In OBS, enable the WebSocket server in **Tools → WebSocket Server Settings** and set a password. Configure `OBS_WS_URL`, `OBS_WS_PASSWORD`, and exact scene names in `OBS_SCENE_1`, `OBS_SCENE_2`, and `OBS_SCENE_3`; `SCENE_RETURN_SECONDS` defaults to 6. Chat can choose only the three numbered actions, never a scene name. OBS switching is mock-tested, not live-verified.
+
+## Resilience
+
+A network hiccup must not take the overlay down mid-stream. While testing live, a keepalive timeout on the Twitch WebSocket crashed the whole server: the `ws` library emitted an `error` event on a socket that was still reconnecting, and nothing was listening.
+
+- **Process guards.** `uncaughtException` and `unhandledRejection` handlers contain errors whose origin is the Twitch, OBS or WebSocket layer (or a plain network error code) and log them. Errors thrown from this project's own code still exit with a non-zero code, so real bugs are never hidden.
+- **Supervisor.** Twurple retries on its own; if Twitch is still disconnected after 5s, then 10s, 20s and 30s (capped), the listener is stopped and started again. A failed first start (for example, no network at launch) is retried the same way.
+- **Visibility.** `/health` reports `twitchConnected`, `twitchReconnecting`, `lastDisconnectAt` and `reconnectAttempts`; the sandbox shows "Twitch: reconnecting…"; the overlay shows a small "Twitch reconnecting" dot (add `?obs=1` to hide it in OBS).
+- **Still serving.** The overlay and sandbox keep working from saved state while Twitch is down.
+
+Verified by 14 unit tests (including the exact error shape from the crash) and a live test: the server process was frozen for 40 seconds to mimic a laptop sleeping, then resumed. It stayed up, logged the disconnect, reconnected on its own, and `/health` showed all 7 subscriptions active again.
 
 ## Known limitations
 

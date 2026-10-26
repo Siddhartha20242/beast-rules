@@ -7,6 +7,9 @@ export interface HealthSubscription {
 
 export interface HealthState {
   twitchConnected: boolean;
+  twitchReconnecting?: boolean;
+  lastDisconnectAt?: string | null;
+  reconnectAttempts?: number;
   broadcasterId: string | null;
   subscriptions: HealthSubscription[];
   compilerMode: "auto" | "ollama" | "template";
@@ -15,6 +18,9 @@ export interface HealthState {
 }
 
 export interface HealthResponse extends HealthState {
+  twitchReconnecting: boolean;
+  lastDisconnectAt: string | null;
+  reconnectAttempts: number;
   ollamaReachable: boolean;
 }
 
@@ -36,7 +42,14 @@ export async function buildHealthResponse(
   } finally {
     clearTimeout(timeout);
   }
-  return { ...state, subscriptions: state.subscriptions.map((item) => ({ ...item })), ollamaReachable };
+  return {
+    ...state,
+    twitchReconnecting: state.twitchReconnecting ?? false,
+    lastDisconnectAt: state.lastDisconnectAt ?? null,
+    reconnectAttempts: state.reconnectAttempts ?? 0,
+    subscriptions: state.subscriptions.map((item) => ({ ...item })),
+    ollamaReachable
+  };
 }
 
 export function createHealthHandler(getState: () => HealthState, ollamaUrl: string, fetcher: typeof fetch = fetch): RequestHandler {
