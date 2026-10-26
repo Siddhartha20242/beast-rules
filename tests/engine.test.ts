@@ -1,6 +1,6 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { RuleEngine } from "../src/engine.js";
 import { TemplateCompiler } from "../src/compiler/template.js";
@@ -28,6 +28,12 @@ afterEach(() => {
 });
 
 describe("RuleEngine", () => {
+  it("stores proposer attribution on an enacted law", () => {
+    const engine = new RuleEngine({ filePath: temporaryFile(), clock: () => 1000 });
+    const enacted = engine.add(rule("wings"), "follow law", "parser", "alice").law;
+    expect(enacted.proposer_name).toBe("alice");
+  });
+
   it("replaces a law in an occupied zone and records its repeal", () => {
     let now = 1_000;
     const engine = new RuleEngine({ filePath: temporaryFile(), clock: () => now });
@@ -106,6 +112,35 @@ describe("RuleEngine", () => {
     expect(reloadedId).toBe(replacement.law.id);
     expect(reloadedOverruledBy).toBe(replacement.law.id);
     expect(next.law.id).not.toBe(reloadedId);
+  });
+
+  it("keeps proposer attribution absent on laws persisted before attribution existed", () => {
+    const filePath = temporaryFile();
+    const legacyLaw = { ...rule("wings"), id: "law-1", raw_text: "legacy law", zone: "back", timestamp: 10, compiler_path: "parser" };
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, JSON.stringify({ version: 1, nextId: 2, active: [legacyLaw], history: [] }));
+    const engine = new RuleEngine({ filePath });
+    expect(engine.activeLaws[0]?.proposer_name).toBeUndefined();
+  });
+
+  it("clears active laws, history, and crisis state on reset", () => {
+    const filePath = temporaryFile();
+    const engine = new RuleEngine({ filePath, clock: () => 500 });
+    engine.add(rule("wings"), "active law");
+    engine.add(rule("tail"), "replacement law");
+    engine.clearAllLaws();
+    expect(engine.activeLaws).toEqual([]);
+    expect(engine.lawHistory).toEqual([]);
+    expect(new RuleEngine({ filePath }).activeLaws).toEqual([]);
+  });
+
+  it("cancels a live crisis and persists the cancellation", () => {
+    const filePath = temporaryFile();
+    const engine = new RuleEngine({ filePath, clock: () => 500 });
+    engine.add(rule("wings"), "old law");
+    engine.beginCrisis(rule("tail"), "new law", 10);
+    expect(engine.cancelCrisis()?.proposed.raw_text).toBe("new law");
+    expect(new RuleEngine({ filePath, clock: () => 500 }).currentCrisis).toBeUndefined();
   });
 
   it("starts a crisis for a passed replacement while keeping the old law active", () => {

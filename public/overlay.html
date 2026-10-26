@@ -10,20 +10,26 @@
     html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent !important; background-color: transparent !important; color: #f7f7ff; }
     body { position: relative; }
     #scene { position: absolute; inset: 0; display: grid; place-items: center; }
-    #beast-wrap { position: absolute; width: min(102vh, 90vw, 1160px); aspect-ratio: 1; top: 0; filter: drop-shadow(0 18px 18px #080b1c44); }
+    #beast-wrap { position: absolute; width: min(72vh, 72vw, 1000px); aspect-ratio: 1; top: 0; filter: drop-shadow(0 18px 18px #080b1c44); transform: scale(var(--evolution-scale, 1)); transform-origin: center bottom; transition: transform .55s ease, filter .55s ease; }
     #beast { width: 100%; height: 100%; overflow: visible; }
-    .body-shape { fill: #626d8f; stroke: #202943; stroke-width: 8; stroke-linejoin: round; }
-    .body-belly { fill: #8993b1; opacity: .82; }
+    .body-shape { fill: url(#body-gradient); stroke: #202943; stroke-width: 4; stroke-linejoin: round; }
+    .body-belly { fill: url(#belly-gradient); stroke: #202943; stroke-width: 4; stroke-linejoin: round; opacity: .9; }
     .body-idle { transform-box: fill-box; transform-origin: center; animation: breathe 4.2s ease-in-out infinite; }
     .base-eyes { transform-box: fill-box; transform-origin: center; animation: blink 5.2s ease-in-out infinite; }
-    .base-eye { fill: #fff7d6; stroke: #202943; stroke-width: 5; }
+    .base-eye { fill: #fff7d6; stroke: #202943; stroke-width: 4; }
     .base-pupil { fill: #202943; }
-    .base-mouth { fill: none; stroke: #202943; stroke-width: 7; stroke-linecap: round; }
+    .base-mouth { fill: none; stroke: #202943; stroke-width: 4; stroke-linecap: round; }
+    #ground-shadow { fill:#080b1c; opacity:.22; transform-box:fill-box; transform-origin:center; animation:shadow-breathe 4.2s ease-in-out infinite; }
+    #tier-brows, #tier-glint { opacity:0; transition:opacity .45s ease; }
+    #tier-brows.show, #tier-glint.show { opacity:1; }
+    #tier-brows { fill:none; stroke:#202943; stroke-width:4; stroke-linecap:round; }
+    #tier-glint { fill:#fff4a8; stroke:#202943; stroke-width:2; filter:drop-shadow(0 0 5px #fff2a0); }
+    #tier-label { fill:#fff; stroke:#202943; stroke-width:2; paint-order:stroke; font:700 8px Inter,system-ui,sans-serif; text-anchor:middle; letter-spacing:.15px; }
     .part { opacity: 0; transition: opacity .45s ease; }
     .part.active { opacity: 1; }
-    .part-fill { fill: var(--part-color, #c7d2fe); stroke: #202943; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
-    .part.pulse .part-fill { stroke: #fff; stroke-width: 12; filter: drop-shadow(0 0 7px var(--pulse-color, #ffd166)); animation: part-pulse .68s ease-in-out 6; }
-    .part-detail { fill: #fff; stroke: #202943; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+    .part-fill { fill: var(--part-color, #c7d2fe); stroke: #202943; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    .part.pulse .part-fill { stroke: #fff; stroke-width: 7; filter: drop-shadow(0 0 7px var(--pulse-color, #ffd166)); animation: part-pulse .68s ease-in-out 6; }
+    .part-detail { fill: #fff; stroke: #202943; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
     .part-detail[fill="none"] { fill: none; }
     .eye-white { fill: #fff7d6; stroke: #202943; stroke-width: 5; }
     .pupil { fill: #202943; }
@@ -47,59 +53,101 @@
     #law-banner { display:none; position:absolute; z-index:6; top:12px; left:50%; transform:translateX(-50%); width:min(1040px,calc(100vw - 24px)); padding:8px 14px; border:1px solid #ffd166; border-radius:12px; background:#151a2bee; box-shadow:0 6px 24px #05071399; pointer-events:none; }
     #law-banner.show { display:block; }
     #law-banner-headline { margin-bottom:3px; color:#ffd166; font-size:10px; font-weight:950; letter-spacing:.09em; text-transform:uppercase; }
+    #law-banner-credit { margin-bottom:3px; color:#aeb8da; font-size:10px; font-weight:700; }
     #law-banner-line { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:10px; min-width:0; }
     #law-banner-text { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:clamp(12px,1.3vw,17px); font-weight:800; }
     #law-banner-arrow { color:#ffd166; font-size:19px; font-weight:900; }
     #law-banner-part { white-space:nowrap; color:#fff; font-size:clamp(11px,1.2vw,15px); font-weight:950; }
     #law-banner-related { display:none; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; margin-top:3px; color:#d5d9e8; font-size:10px; }
     #law-banner-related.show { display:block; }
-    .law-banner-active #crisis-banner.show { top:76px; }
+    #vote-ticker { display:none; position:absolute; z-index:5; top:12px; left:50%; transform:translateX(-50%); width:max-content; max-width:calc(100vw - 24px); align-items:center; justify-content:center; gap:6px; overflow:hidden; padding:5px 9px; border:1px solid #9aa8d955; border-radius:9px; background:#171d33e8; box-shadow:0 4px 16px #05071366; white-space:nowrap; pointer-events:none; }
+    #vote-ticker.show { display:flex; }
+    .ticker-entry { overflow:hidden; text-overflow:ellipsis; color:#e4e8f6; font-size:10px; line-height:1.2; transition:opacity .2s; }
+    .ticker-name { color:#ffd166; font-weight:850; }
+    .ticker-sim { margin-left:3px; padding:1px 3px; border-radius:3px; background:#ffd166; color:#29233a; font-size:8px; font-weight:950; }
+    .law-banner-active #beast-wrap, .vote-ticker-active #beast-wrap { width:min(72vh,72vw,840px); top:118px; }
+    #sound-hint { display:none; position:absolute; z-index:8; right:12px; top:12px; padding:6px 9px; border:1px solid #ffd166; border-radius:8px; background:#171d33e8; color:#ffe7a8; font-size:10px; font-weight:800; cursor:pointer; }
+    #sound-hint.show { display:block; }
     #notice { display:none; position:absolute; z-index:7; left:50%; top:18px; transform:translateX(-50%); padding:12px 18px; border:1px solid #ffcc66; border-radius:10px; background:#24190de8; color:#ffe5b4; font-weight:700; }
-    #crisis-banner { display:none; position:absolute; z-index:4; top:18px; left:50%; transform:translateX(-50%); width:min(920px,calc(100vw - 24px)); padding:14px; border:2px solid #ff6969; border-radius:16px; background:#341d28f2; box-shadow:0 0 32px #ff3d4b55; }
+    #paused-badge { display:none; position:absolute; z-index:8; left:50%; top:74px; transform:translateX(-50%); max-width:calc(100vw - 24px); padding:7px 13px; border:2px solid #ffd166; border-radius:999px; background:#442d0df2; color:#ffe7a8; font-size:clamp(11px,1.4vw,16px); font-weight:950; letter-spacing:.08em; text-align:center; box-shadow:0 0 20px #ffd16655; }
+    #paused-badge.show { display:block; }
+    #crisis-banner { display:none; position:absolute; z-index:4; left:50%; bottom:clamp(150px,20vh,220px); transform:translateX(-50%); width:min(920px,calc(100vw - 24px)); max-height:clamp(132px,22vh,210px); padding:9px 12px; border:2px solid #ff6969; border-radius:16px; background:#341d28f2; box-shadow:0 0 32px #ff3d4b55; overflow:hidden; }
     #crisis-banner.show { display:block; }
-    #crisis-title { color:#ffe37b; text-align:center; font-size:clamp(16px,2.3vw,24px); font-weight:950; letter-spacing:.1em; }
-    #crisis-countdown { margin:4px 0 10px; text-align:center; color:#ffd8d8; font-size:14px; font-weight:800; }
+    #crisis-title { color:#ffe37b; text-align:center; font-size:clamp(13px,1.7vw,19px); font-weight:950; letter-spacing:.1em; }
+    #crisis-countdown { margin:2px 0 6px; text-align:center; color:#ffd8d8; font-size:12px; font-weight:800; }
     #crisis-laws { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-    .crisis-law { min-width:0; padding:11px; border-radius:11px; background:#171d33e8; border:1px solid #ff9c9c66; }
-    .crisis-law-title { color:#ffd166; font-size:12px; font-weight:900; margin-bottom:5px; }
-    .crisis-law-text { min-height:2.4em; font-size:clamp(11px,1.4vw,14px); line-height:1.2; font-weight:700; overflow-wrap:anywhere; }
-    .crisis-track { height:9px; margin-top:8px; overflow:hidden; border-radius:99px; background:#353d59; }
+    .crisis-law { min-width:0; padding:7px 9px; border-radius:11px; background:#171d33e8; border:1px solid #ff9c9c66; }
+    .crisis-law-title { color:#ffd166; font-size:10px; font-weight:900; margin-bottom:3px; }
+    .crisis-part-row { display:flex; align-items:center; gap:8px; min-height:38px; margin-bottom:3px; }
+    .crisis-part-preview { width:38px; height:38px; flex:0 0 38px; filter:drop-shadow(0 1px 3px #0008); }
+    .crisis-law-text { min-height:0; max-height:2.4em; font-size:clamp(10px,1.1vw,13px); line-height:1.2; font-weight:700; overflow:hidden; overflow-wrap:anywhere; }
+    .crisis-track { height:7px; margin-top:5px; overflow:hidden; border-radius:99px; background:#353d59; }
     .crisis-fill { height:100%; width:0; background:#73e0a9; transition:width .2s; }
     #crisis-proposed-fill { background:#ff7b89; }
-    .crisis-count { margin-top:5px; color:#d9dcec; font-size:12px; font-weight:800; }
+    .crisis-count { margin-top:3px; color:#d9dcec; font-size:10px; font-weight:800; }
+    @media (max-height: 650px) { #crisis-banner { padding:5px 8px; bottom:145px; max-height:128px; } #crisis-countdown { margin:1px 0 3px; font-size:11px; } .crisis-law { padding:4px 6px; } .crisis-part-row { min-height:30px; margin-bottom:2px; } .crisis-part-preview { width:30px; height:30px; flex-basis:30px; } .crisis-track { margin-top:3px; } .crisis-count { margin-top:2px; } }
     #sim-tag { position: absolute; right: 22px; top: 20px; padding: 5px 9px; border-radius: 6px; background: #ffd166; color: #29233a; font-size: 10px; font-weight: 900; letter-spacing: .08em; opacity: 0; transition: opacity .2s; }
     #sim-tag.visible { opacity: 1; }
+    #part-preview-label { position:absolute; z-index:3; top:8px; left:50%; transform:translateX(-50%); display:none; max-width:calc(100vw - 24px); padding:5px 9px; border:1px solid #aeb8da66; border-radius:8px; background:#171d33e8; color:#f2e8bd; font-size:10px; font-weight:850; letter-spacing:.05em; white-space:nowrap; }
+    #part-preview-label.show { display:block; }
     #flash { position: fixed; inset: 0; pointer-events: none; background: #fff; opacity: 0; }
-    #flash.play { animation: flash .35s ease-out; }
-    .shake #beast-wrap { animation: shake .4s ease-in-out; }
-    .confetti-piece { position: fixed; top: -14px; width: 9px; height: 14px; border-radius: 2px; pointer-events: none; animation: fall 1.6s linear forwards; }
-    @keyframes flash { 15% { opacity: .72; } 100% { opacity: 0; } }
+    #flash.play { animation: flash 1.1s ease-out; }
+    .shake #beast-wrap { animation: shake 1.15s ease-in-out; }
+    .confetti-piece { position: fixed; top: -14px; width: 9px; height: 14px; border-radius: 2px; pointer-events: none; animation: fall 2.3s linear forwards; }
+    #roar-mouth { opacity:0; fill:#171d33; stroke:#202943; stroke-width:6; transform-box:fill-box; transform-origin:center; }
+    #roar-tongue { opacity:0; fill:#ff7b89; stroke:#202943; stroke-width:3; }
+    .roaring #roar-mouth { animation: roar-mouth 1.4s ease-in-out forwards; }
+    .roaring #roar-tongue { animation: roar-tongue 1.4s ease-in-out forwards; }
+    .tier-up #beast { animation:tier-celebrate 1.25s ease-out; }
+    .part[data-part="tail"].active { transform-box:view-box; transform-origin:356px 350px; animation:tail-sway 3.4s ease-in-out infinite; }
+    .part[data-part="wings"].active > g:first-child { transform-box:view-box; transform-origin:180px 250px; animation:wing-flutter 3.1s ease-in-out infinite; }
+    .part[data-part="wings"].active > g:last-child { transform-box:view-box; transform-origin:320px 250px; animation:wing-flutter 3.1s ease-in-out infinite reverse; }
+    .part[data-part="flames"].active { animation:flame-flicker 2.8s ease-in-out infinite; transform-box:view-box; transform-origin:center; }
+    .part[data-part="lightning"].active { animation:lightning-crackle 3.6s steps(1,end) infinite; }
+    body.page-hidden * { animation-play-state:paused !important; }
+    @keyframes flash { 12% { opacity: .62; } 100% { opacity: 0; } }
     @keyframes breathe { 0%,100% { transform: translateY(0) scale(1,1); } 50% { transform: translateY(-2px) scale(1.012,1.025); } }
+    @keyframes shadow-breathe { 0%,100% { transform:scaleX(1); opacity:.22; } 50% { transform:scaleX(.96); opacity:.18; } }
+    @keyframes tail-sway { 0%,100% { transform:rotate(-2deg); } 50% { transform:rotate(3deg); } }
+    @keyframes wing-flutter { 0%,100% { transform:rotate(0deg); } 50% { transform:rotate(-2.2deg); } }
+    @keyframes flame-flicker { 0%,100% { opacity:1; } 47% { opacity:.9; } 50% { opacity:.96; } 53% { opacity:.88; } }
+    @keyframes lightning-crackle { 0%,91%,94%,100% { opacity:1; filter:drop-shadow(0 0 0 transparent); } 92%,93% { opacity:.82; filter:drop-shadow(0 0 4px #fff); } }
+    @keyframes tier-celebrate { 0% { transform:scale(1); filter:drop-shadow(0 0 0 #fff0); } 38% { transform:scale(1.07); filter:drop-shadow(0 0 18px #ffe48a); } 100% { transform:scale(1); filter:drop-shadow(0 0 4px #ffe48a); } }
     @keyframes blink { 0%,43%,47%,100% { transform: scaleY(1); } 45% { transform: scaleY(.08); } }
-    @keyframes shake { 0%,100% { transform: translateX(0) rotate(0); } 20% { transform: translateX(-12px) rotate(-2deg); } 45% { transform: translateX(10px) rotate(2deg); } 70% { transform: translateX(-7px) rotate(-1deg); } }
+    @keyframes shake { 0%,100% { transform: translateX(0) rotate(0); } 16% { transform: translateX(-22px) rotate(-3deg); } 36% { transform: translateX(20px) rotate(3deg); } 56% { transform: translateX(-16px) rotate(-2deg); } 76% { transform: translateX(12px) rotate(1deg); } }
     @keyframes fall { to { transform: translateY(110vh) rotate(620deg); opacity: .2; } }
+    @keyframes roar-mouth { 0%,100% { opacity:0; transform:scaleY(.3); } 18%,75% { opacity:1; transform:scaleY(1); } }
+    @keyframes roar-tongue { 0%,100% { opacity:0; } 25%,75% { opacity:1; } }
     @keyframes part-pulse { 0%,100% { stroke-width:8; opacity:.9; } 50% { stroke-width:15; opacity:1; } }
     @media (max-width: 560px) { #law-banner { padding:7px 9px; } #law-banner-line { gap:5px; } #law-banner-arrow { font-size:15px; } #law-banner-related { font-size:9px; } }
   </style>
 </head>
 <body>
   <div id="notice"></div>
+  <div id="paused-badge" aria-live="polite">PAUSED · Streamer controls are holding all laws</div>
   <section id="law-banner" aria-live="polite">
     <div id="law-banner-headline"></div>
+    <div id="law-banner-credit"></div>
     <div id="law-banner-line"><div id="law-banner-text"></div><div id="law-banner-arrow">→</div><div id="law-banner-part"></div></div>
     <div id="law-banner-related"></div>
   </section>
+  <div id="vote-ticker" aria-live="polite"></div>
   <section id="crisis-banner" aria-live="polite">
     <div id="crisis-title">⚠ CONSTITUTIONAL CRISIS ⚠</div>
     <div id="crisis-countdown"></div>
     <div id="crisis-laws">
-      <div class="crisis-law"><div class="crisis-law-title">1 · EXISTING LAW</div><div id="crisis-existing-text" class="crisis-law-text"></div><div class="crisis-track"><div id="crisis-existing-fill" class="crisis-fill"></div></div><div id="crisis-existing-count" class="crisis-count"></div></div>
-      <div class="crisis-law"><div class="crisis-law-title">2 · NEW LAW</div><div id="crisis-proposed-text" class="crisis-law-text"></div><div class="crisis-track"><div id="crisis-proposed-fill" class="crisis-fill"></div></div><div id="crisis-proposed-count" class="crisis-count"></div></div>
+      <div class="crisis-law"><div class="crisis-law-title">1 · EXISTING LAW</div><div class="crisis-part-row"><svg id="crisis-existing-preview" class="crisis-part-preview" viewBox="0 0 100 100" aria-label="Existing law part preview"></svg><div id="crisis-existing-text" class="crisis-law-text"></div></div><div class="crisis-track"><div id="crisis-existing-fill" class="crisis-fill"></div></div><div id="crisis-existing-count" class="crisis-count"></div></div>
+      <div class="crisis-law"><div class="crisis-law-title">2 · NEW LAW</div><div class="crisis-part-row"><svg id="crisis-proposed-preview" class="crisis-part-preview" viewBox="0 0 100 100" aria-label="Proposed law part preview"></svg><div id="crisis-proposed-text" class="crisis-law-text"></div></div><div class="crisis-track"><div id="crisis-proposed-fill" class="crisis-fill"></div></div><div id="crisis-proposed-count" class="crisis-count"></div></div>
     </div>
   </section>
   <div id="scene">
     <div id="beast-wrap" aria-label="The evolving Constitution Beast">
       <svg id="beast" viewBox="0 0 500 500" role="img" aria-label="Flat SVG beast with five mutation zones">
+        <defs>
+          <linearGradient id="body-gradient" x1="0" y1="0" x2="0.9" y2="1"><stop id="body-stop-top" offset="0" stop-color="#8998c2"/><stop id="body-stop-mid" offset=".55" stop-color="#626d8f"/><stop id="body-stop-bottom" offset="1" stop-color="#424d70"/></linearGradient>
+          <linearGradient id="belly-gradient" x1="0" y1="0" x2="0" y2="1"><stop id="belly-stop-top" offset="0" stop-color="#bec9e7"/><stop id="belly-stop-bottom" offset="1" stop-color="#8993b1"/></linearGradient>
+        </defs>
+        <ellipse id="ground-shadow" cx="250" cy="398" rx="118" ry="15"/>
         <!-- Aura: flames, runes, lightning -->
         <g class="part" data-part="flames"><path class="part-fill" d="M86 290 Q48 232 91 186 Q82 226 118 229 Q94 183 137 131 Q132 199 174 222 L158 310Z"/><path class="part-fill" d="M414 290 Q452 232 409 186 Q418 226 382 229 Q406 183 363 131 Q368 199 326 222 L342 310Z"/></g>
         <g class="part" data-part="runes"><path class="part-fill" d="M66 206l18-23 18 23-18 23zM398 206l18-23 18 23-18 23zM75 330h20m-10-10v20m330-10h-20m10-10v20" fill="none"/><circle class="part-detail" cx="84" cy="206" r="5"/><circle class="part-detail" cx="416" cy="206" r="5"/></g>
@@ -123,6 +171,13 @@
         <g class="part" data-part="claws"><path class="part-fill" d="M145 343l-42 47 44-8 8 38 32-55zM355 343l42 47-44-8-8 38-32-55z"/></g>
         <g class="part" data-part="extra_arms"><path class="part-fill" d="M157 260Q98 250 81 289L116 302 77 322Q124 337 170 307zM343 260Q402 250 419 289L384 302 423 322Q376 337 330 307z"/></g>
 
+        <!-- Wide segmented carapace sits behind the body and shows at both flanks. -->
+        <g class="part" data-part="shell">
+          <path class="part-fill" d="M74 250C78 166 146 121 250 120C354 121 422 166 426 250C423 312 356 351 250 356C144 351 77 312 74 250Z"/>
+          <path class="part-detail" d="M250 123V353M116 170Q146 188 178 205M82 230Q120 244 151 238M96 290Q130 274 162 286M384 170Q354 188 322 205M418 230Q380 244 349 238M404 290Q370 274 338 286M126 143L143 183 107 222M374 143L357 183 393 222" fill="none"/>
+          <path d="M110 175Q127 142 166 132M390 175Q373 142 334 132M93 270Q120 293 151 292M407 270Q380 293 349 292" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".68"/>
+        </g>
+
         <!-- Beast body -->
         <g class="body-idle">
           <path class="body-shape" d="M250 112C178 112 139 171 145 252L157 331Q167 372 250 379Q333 372 343 331L355 252C361 171 322 112 250 112Z"/>
@@ -133,14 +188,8 @@
           </g>
           <path class="base-mouth" d="M224 207Q250 225 276 207"/>
           <path d="M244 193l6 5 6-5" fill="none" stroke="#202943" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path id="tier-brows" d="M194 153Q212 145 230 153M270 153Q288 145 306 153"/>
         </g>
-
-        <!-- Back shell sits over the torso so its segmented silhouette remains visible. -->
-        <g class="part" data-part="shell">
-          <path class="part-fill" d="M158 255Q168 228 250 228Q332 228 342 255L330 319Q250 357 170 319Z"/>
-          <path class="part-detail" d="M250 233l25 25-25 28-25-28zm-75 31 46-11m58 0 46 11m-118 1-8 48m108-48 8 48m-60-59v90" fill="none"/>
-        </g>
-
         <!-- Torso zone -->
         <g class="part" data-part="spikes"><path class="part-fill" d="M157 206l-36-20 25 51-32 22 40 13M343 206l36-20-25 51 32 22-40 13"/></g>
         <g class="part" data-part="armor"><path class="part-fill" d="M183 213Q250 187 317 213L303 299Q250 321 197 299Z"/><path class="part-detail" d="M250 201v105m-55-67h110" fill="none"/></g>
@@ -149,12 +198,18 @@
         <!-- Head zone -->
         <g class="part" data-part="horns"><path class="part-fill" d="M178 143Q127 111 141 55Q162 92 202 111ZM322 143Q373 111 359 55Q338 92 298 111Z"/></g>
         <g class="part" data-part="crown"><path class="part-fill" d="M183 115l9-42 32 28 26-43 26 43 32-28 9 42Z"/><path class="part-detail" d="M186 118h128" fill="none"/></g>
+        <path id="tier-glint" d="M250 40L254 50 264 54 254 58 250 68 246 58 236 54 246 50Z"/>
         <g class="part" data-part="eyes"><ellipse class="eye-white" cx="213" cy="173" rx="20" ry="15"/><ellipse class="eye-white" cx="287" cy="173" rx="20" ry="15"/><circle class="pupil" cx="217" cy="175" r="7"/><circle class="pupil" cx="283" cy="175" r="7"/></g>
+        <ellipse id="roar-mouth" cx="250" cy="216" rx="32" ry="6"/>
+        <path id="roar-tongue" d="M232 220Q250 236 268 220Q264 239 250 239Q236 239 232 220Z"/>
         <path d="M232 199Q250 212 268 199" fill="none" stroke="#202943" stroke-width="6" stroke-linecap="round"/>
+        <text id="tier-label" x="250" y="433">Tier 1 - Hatchling</text>
       </svg>
     </div>
   </div>
   <div id="sim-tag">SIM</div>
+  <div id="part-preview-label" aria-live="polite"></div>
+  <button id="sound-hint" type="button">Click to enable sound</button>
   <div id="flash"></div>
   <section id="hud">
     <div id="vote" class="panel">
@@ -168,6 +223,7 @@
   </section>
   <script>
     const overlayColors = { red: "#ff5d68", orange: "#ff9f43", yellow: "#ffd166", green: "#63d995", cyan: "#45d5d0", blue: "#5c9dff", purple: "#b27aff", pink: "#ff7eb6" };
+    const partZones = { horns:"head", eyes:"head", crown:"head", spikes:"torso", armor:"torso", scales:"torso", wings:"back", tail:"back", shell:"back", tentacles:"limbs", claws:"limbs", extra_arms:"limbs", flames:"aura", runes:"aura", lightning:"aura" };
     const socketUrl = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
     let reconnectDelay = 500;
     let simTimer;
@@ -177,6 +233,220 @@
     let lawBannerTimer;
     let currentLawBannerId = "";
     let highlightedLawId = "";
+    let alarmTimer;
+    let tickerTimer;
+    let latestTicker = [];
+    let latestState;
+    let lastEvolutionTier;
+    let partPreviewTimer;
+    let audioContext;
+    let masterGain;
+    const soundMode = new URLSearchParams(location.search).get("sound");
+    const soundDisabled = soundMode === "off";
+    const obsSoundMode = soundMode === "on";
+
+    function audioMasterSettings() {
+      return {
+        volume: Math.min(1, Math.max(0, Number(localStorage.getItem("beastSoundVolume") ?? 35) / 100)),
+        muted: localStorage.getItem("beastSoundMuted") === "true"
+      };
+    }
+
+    function getAudioContext() {
+      if (soundDisabled) return undefined;
+      if (!audioContext) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return undefined;
+        audioContext = new AudioContextClass();
+        masterGain = audioContext.createGain();
+        masterGain.connect(audioContext.destination);
+      }
+      const settings = audioMasterSettings();
+      masterGain.gain.setTargetAtTime(settings.muted ? 0 : settings.volume, audioContext.currentTime, .03);
+      if (audioContext.state === "suspended") void audioContext.resume().catch(() => undefined);
+      return audioContext;
+    }
+
+    function playTone(frequency, duration, options = {}) {
+      const context = getAudioContext();
+      if (!context || audioMasterSettings().muted) return;
+      const { type = "sine", endFrequency, delay = 0, volume = .22 } = options;
+      const start = context.currentTime + delay;
+      const oscillator = context.createOscillator();
+      const envelope = context.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, start);
+      if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, endFrequency), start + duration * .8);
+      envelope.gain.setValueAtTime(.0001, start);
+      envelope.gain.exponentialRampToValueAtTime(volume, start + Math.min(.025, duration / 5));
+      envelope.gain.setValueAtTime(volume, start + duration * .55);
+      envelope.gain.exponentialRampToValueAtTime(.0001, start + duration);
+      oscillator.connect(envelope).connect(masterGain);
+      oscillator.start(start);
+      oscillator.stop(start + duration + .01);
+    }
+
+    function playCue(cue) {
+      if (soundDisabled || audioMasterSettings().muted) return;
+      switch (cue) {
+        case "law_passed":
+          playTone(105, .38, { type: "sine", endFrequency: 48, volume: .32 });
+          playTone(720, .06, { type: "triangle", volume: .12 });
+          break;
+        case "vote_open":
+          [440, 587, 784].forEach((frequency, index) => playTone(frequency, .24, { type: "sine", delay: index * .16, volume: .16 }));
+          break;
+        case "crisis_alarm_pulse":
+          playTone(390, .22, { type: "triangle", volume: .12 });
+          playTone(320, .22, { type: "triangle", delay: .28, volume: .12 });
+          break;
+        case "crisis_resolved":
+          [262, 330, 392].forEach((frequency) => playTone(frequency, .72, { type: "sine", volume: .14 }));
+          break;
+        case "vote_cast": playTone(740, .09, { type: "sine", volume: .12 }); break;
+        case "screen_shake": playTone(58, .85, { type: "sawtooth", endFrequency: 35, volume: .24 }); break;
+        case "screen_flash": playTone(1200, .42, { type: "square", endFrequency: 150, volume: .10 }); break;
+        case "confetti":
+          [1047, 1319, 1568, 2093].forEach((frequency, index) => playTone(frequency, .2, { type: "sine", delay: index * .13, volume: .12 }));
+          break;
+        case "beast_roar": playTone(92, .9, { type: "sawtooth", endFrequency: 38, volume: .2 }); break;
+        case "tier_up": [523, 659, 784].forEach((frequency, index) => playTone(frequency, .24, { type:"triangle", delay:index * .14, volume:.13 })); break;
+      }
+    }
+
+    function mixHex(hex, target, amount) {
+      const source = hex.replace("#", "").match(/.{2}/g).map((value) => parseInt(value, 16));
+      const destination = target.match(/.{2}/g).map((value) => parseInt(value, 16));
+      return `#${source.map((value, index) => Math.round(value + (destination[index] - value) * amount).toString(16).padStart(2, "0")).join("")}`;
+    }
+
+    const partGroups = [...document.querySelectorAll(".part[data-part]")];
+    for (const group of partGroups) {
+      const gradient = document.createElementNS("http://www.w3.org/2000/svg", "linearGradient");
+      gradient.id = `gradient-${group.dataset.part}`;
+      gradient.setAttribute("x1", "0"); gradient.setAttribute("y1", "0"); gradient.setAttribute("x2", "0.15"); gradient.setAttribute("y2", "1");
+      for (const [offset, blend] of [["0%", .48], ["42%", 0], ["100%", -.24]]) {
+        const stop = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+        stop.setAttribute("offset", offset); stop.dataset.blend = String(blend); gradient.append(stop);
+      }
+      document.querySelector("#beast defs").append(gradient);
+      for (const shape of group.querySelectorAll(".part-fill")) shape.style.fill = `url(#${gradient.id})`;
+    }
+
+    function setPartColor(group, color) {
+      const base = overlayColors[color] || color || "#c7d2fe";
+      group.style.setProperty("--part-color", base);
+      const gradient = document.getElementById(`gradient-${group.dataset.part}`);
+      if (gradient) for (const stop of gradient.children) {
+        const blend = Number(stop.dataset.blend);
+        stop.setAttribute("stop-color", blend >= 0 ? mixHex(base, "ffffff", blend) : mixHex(base, "101629", -blend));
+      }
+    }
+
+    function evolutionTier(count) {
+      if (count >= 15) return 5;
+      if (count >= 10) return 4;
+      if (count >= 6) return 3;
+      if (count >= 3) return 2;
+      return 1;
+    }
+
+    function updateEvolution(state) {
+      const tier = evolutionTier(Math.max(0, Number(state.laws_passed_count) || 0));
+      const names = ["", "Hatchling", "Awakened", "Elder", "Mythic", "Sovereign"];
+      const palettes = {
+        1: ["#8998c2", "#626d8f", "#424d70", "#d0d8ec", "#95a1c0", "#a9b9e8"],
+        2: ["#aab5e2", "#717db1", "#4b5688", "#dce2fa", "#a6b1d4", "#968aff"],
+        3: ["#b7a0e7", "#7964b2", "#514173", "#eee1ff", "#aa97cd", "#c19cff"],
+        4: ["#e2ae79", "#ae714d", "#704735", "#ffe0ad", "#c99670", "#ffb56b"],
+        5: ["#81d6ce", "#438e93", "#28545f", "#d0fff3", "#83beb8", "#66efe0"]
+      };
+      const [top, mid, bottom, bellyTop, bellyBottom, glow] = palettes[tier];
+      document.getElementById("body-stop-top").setAttribute("stop-color", top);
+      document.getElementById("body-stop-mid").setAttribute("stop-color", mid);
+      document.getElementById("body-stop-bottom").setAttribute("stop-color", bottom);
+      document.getElementById("belly-stop-top").setAttribute("stop-color", bellyTop);
+      document.getElementById("belly-stop-bottom").setAttribute("stop-color", bellyBottom);
+      const scales = [0, 1, 1.06, 1.12, 1.21, 1.3];
+      const wrap = document.getElementById("beast-wrap");
+      wrap.style.setProperty("--evolution-scale", String(scales[tier]));
+      wrap.style.filter = `drop-shadow(0 18px 18px #080b1c44) drop-shadow(0 0 ${5 + tier * 2}px ${glow}55)`;
+      document.getElementById("tier-label").textContent = `Tier ${tier} - ${names[tier]}`;
+      document.getElementById("tier-brows").classList.toggle("show", tier >= 3);
+      document.getElementById("tier-glint").classList.toggle("show", tier >= 5);
+      if (lastEvolutionTier !== undefined && tier > lastEvolutionTier) {
+        wrap.classList.remove("tier-up"); void wrap.offsetWidth; wrap.classList.add("tier-up");
+        setTimeout(() => wrap.classList.remove("tier-up"), 1350);
+        playCue("tier_up");
+      }
+      lastEvolutionTier = tier;
+    }
+
+    function previewAllParts() {
+      clearInterval(partPreviewTimer);
+      const label = document.getElementById("part-preview-label");
+      const ids = Object.keys(partZones);
+      let index = 0;
+      const showPart = () => {
+        if (index >= ids.length) {
+          clearInterval(partPreviewTimer); partPreviewTimer = undefined; label.classList.remove("show");
+          if (latestState) render(latestState);
+          if (window.parent !== window) window.parent.postMessage({ type: "preview_finished" }, location.origin);
+          return;
+        }
+        const partId = ids[index++];
+        for (const group of partGroups) {
+          const active = group.dataset.part === partId;
+          group.classList.toggle("active", active); group.classList.remove("banner-only");
+          if (active) setPartColor(group, "cyan");
+        }
+        label.textContent = `PREVIEW · ${partId.replaceAll("_", " ").toUpperCase()} · ${partZones[partId].toUpperCase()}`;
+        label.classList.add("show");
+        if (window.parent !== window && index === 1) window.parent.postMessage({ type: "preview_started" }, location.origin);
+      };
+      showPart(); partPreviewTimer = setInterval(showPart, 1000);
+    }
+
+    window.addEventListener("message", (event) => {
+      if (event.origin === location.origin && event.source === window.parent && event.data?.type === "preview_all_parts") previewAllParts();
+    });
+    document.addEventListener("visibilitychange", () => document.body.classList.toggle("page-hidden", document.hidden));
+
+    function setCrisisAlarm(active) {
+      if (active && !alarmTimer && !soundDisabled) {
+        playCue("crisis_alarm_pulse");
+        alarmTimer = setInterval(() => playCue("crisis_alarm_pulse"), 1100);
+      } else if (!active && alarmTimer) {
+        clearInterval(alarmTimer);
+        alarmTimer = undefined;
+      }
+    }
+
+    const soundHint = document.getElementById("sound-hint");
+    if (!soundDisabled && !obsSoundMode) soundHint.classList.add("show");
+    soundHint.addEventListener("click", () => {
+      const context = getAudioContext();
+      if (context) void context.resume();
+      soundHint.classList.remove("show");
+    });
+    window.addEventListener("storage", () => { if (audioContext) getAudioContext(); });
+    const crisisPartIcons = {
+      horns: "M8 82Q10 45 35 25L43 55Q29 70 8 82ZM92 82Q90 45 65 25L57 55Q71 70 92 82Z",
+      eyes: "M12 50Q30 24 48 50Q30 76 12 50ZM52 50Q70 24 88 50Q70 76 52 50Z",
+      crown: "M8 72 14 35 35 53 50 20 65 53 86 35 92 72Z",
+      spikes: "M12 78 24 28 39 62 50 16 62 62 78 28 88 78Z",
+      armor: "M20 18Q50 5 80 18L74 78Q50 95 26 78Z M50 16V82M25 48H75",
+      scales: "M18 30Q30 12 42 30Q30 48 18 30ZM45 30Q57 12 69 30Q57 48 45 30ZM31 57Q43 39 55 57Q43 75 31 57ZM58 57Q70 39 82 57Q70 75 58 57Z",
+      wings: "M49 49Q30 16 5 17Q12 43 25 53Q14 51 7 58Q22 78 47 66ZM51 49Q70 16 95 17Q88 43 75 53Q86 51 93 58Q78 78 53 66Z M48 50 15 27M47 58 12 59M52 50 85 27M53 58 88 59",
+      tail: "M20 50Q50 20 63 49Q72 70 90 42Q87 83 61 79Q36 75 49 55Z",
+      shell: "M15 55Q20 18 50 18Q80 18 85 55L76 78Q50 94 24 78Z M50 20V88M20 53H80M32 26 40 48 25 69M68 26 60 48 75 69",
+      tentacles: "M25 23Q10 48 27 56Q40 63 18 84Q49 83 45 58L40 30ZM75 23Q90 48 73 56Q60 63 82 84Q51 83 55 58L60 30Z",
+      claws: "M22 23 12 70 40 61 45 87 57 55ZM78 23 88 70 60 61 55 87 43 55Z",
+      extra_arms: "M28 38Q10 26 5 49L23 53 8 66Q29 74 44 57ZM72 38Q90 26 95 49L77 53 92 66Q71 74 56 57Z",
+      flames: "M20 82Q5 55 26 36Q23 57 39 55Q30 31 53 12Q50 43 70 55Q79 47 77 34Q99 55 80 82Z",
+      runes: "M18 23 30 11 42 23 30 35ZM58 23 70 11 82 23 70 35ZM25 54H35M30 49V59M65 54H75M70 49V59M42 82 56 67 48 67 60 48",
+      lightning: "M54 8 25 53H45L37 92 77 40H56Z"
+    };
 
     function showSim() {
       const tag = document.getElementById("sim-tag");
@@ -184,6 +454,52 @@
       clearTimeout(simTimer);
       simTimer = setTimeout(() => tag.classList.remove("visible"), 3000);
     }
+
+    function renderCrisisPartPreview(targetId, partId, color) {
+      const preview = document.getElementById(targetId);
+      preview.replaceChildren();
+      const iconPath = crisisPartIcons[partId];
+      if (!iconPath) return;
+      preview.setAttribute("viewBox", "0 0 100 100");
+      const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      shape.setAttribute("d", iconPath);
+      shape.setAttribute("fill", overlayColors[color] || "#ffd166");
+      shape.setAttribute("stroke", "#202943");
+      shape.setAttribute("stroke-width", "5");
+      shape.setAttribute("stroke-linejoin", "round");
+      shape.setAttribute("stroke-linecap", "round");
+      preview.append(shape);
+    }
+
+    function renderVoteTicker(entries = latestTicker) {
+      latestTicker = entries.slice(-5);
+      const ticker = document.getElementById("vote-ticker");
+      const visible = latestTicker.filter((entry) => Date.now() - entry.at >= 0 && Date.now() - entry.at < 4000);
+      ticker.replaceChildren();
+      ticker.classList.toggle("show", visible.length > 0);
+      document.body.classList.toggle("vote-ticker-active", visible.length > 0);
+      const banner = document.getElementById("law-banner");
+      ticker.style.top = banner.classList.contains("show") ? `${banner.getBoundingClientRect().bottom + 6}px` : "12px";
+      for (const entry of visible) {
+        const item = document.createElement("span");
+        item.className = "ticker-entry";
+        const name = document.createElement("span");
+        name.className = "ticker-name";
+        name.textContent = entry.username;
+        item.append(name, document.createTextNode(` voted ${entry.choice}`));
+        if (entry.simulated) {
+          const badge = document.createElement("span");
+          badge.className = "ticker-sim";
+          badge.textContent = "SIM";
+          item.append(badge);
+        }
+        const age = Date.now() - entry.at;
+        item.style.opacity = String(Math.min(1, Math.max(0, (4000 - age) / 650)));
+        ticker.append(item);
+      }
+    }
+
+    tickerTimer = setInterval(() => renderVoteTicker(), 200);
 
     function hideLawBanner() {
       clearTimeout(lawBannerTimer);
@@ -211,6 +527,9 @@
       hideLawBanner();
       currentLawBannerId = banner.banner_id;
       document.getElementById("law-banner-headline").textContent = banner.headline;
+      const credit = document.getElementById("law-banner-credit");
+      credit.textContent = banner.proposer_name && banner.proposer_name !== "unknown" ? `by ${banner.proposer_name}` : "";
+      credit.hidden = !credit.textContent;
       document.getElementById("law-banner-text").textContent = banner.law_text;
       document.getElementById("law-banner-part").textContent = `${banner.part_id.replaceAll("_", " ").toUpperCase()} (${banner.color}, ${banner.zone})`;
       const related = document.getElementById("law-banner-related");
@@ -225,7 +544,7 @@
         part.style.setProperty("--pulse-color", overlayColors[banner.color] || "#ffd166");
         const alreadyActive = Object.values(partMap).some((active) => active.part_id === banner.part_id);
         if (!alreadyActive) {
-          part.style.setProperty("--part-color", overlayColors[banner.color] || "#c7d2fe");
+          setPartColor(part, banner.color);
           part.classList.add("active", "banner-only");
         }
         part.classList.add("pulse");
@@ -234,15 +553,20 @@
     }
 
     function render(state) {
+      latestState = state;
+      document.getElementById("paused-badge").classList.toggle("show", Boolean(state.paused));
+      updateEvolution(state);
       const partMap = state.beast_parts || {};
-      for (const group of document.querySelectorAll(".part[data-part]")) {
+      for (const group of partGroups) {
         const partId = group.dataset.part;
         const active = Object.values(partMap).find((part) => part.part_id === partId);
         group.classList.remove("banner-only");
-        group.classList.toggle("active", Boolean(active));
-        if (active) group.style.setProperty("--part-color", overlayColors[active.color] || "#c7d2fe");
+        if (!partPreviewTimer) group.classList.toggle("active", Boolean(active));
+        if (active && !partPreviewTimer) setPartColor(group, active.color);
       }
       showLawBanner(state.law_banner, partMap);
+      renderVoteTicker(state.vote_ticker || []);
+      setCrisisAlarm(Boolean(state.crisis));
 
       const laws = document.getElementById("laws");
       laws.replaceChildren();
@@ -256,7 +580,13 @@
         const compilerTag = document.createElement("span");
         compilerTag.className = "compiler-label";
         compilerTag.textContent = law.compiler_path || "parser";
-        item.append(id, document.createTextNode(law.raw_text), compilerTag);
+        const proposer = document.createElement("span");
+        proposer.className = "law-proposer";
+        const proposerName = typeof law.proposer_name === "string" && law.proposer_name !== "unknown" ? law.proposer_name : "";
+        if (proposerName) proposer.textContent = ` by ${proposerName}`;
+        item.append(id, document.createTextNode(law.raw_text));
+        if (proposerName) item.append(proposer);
+        item.append(compilerTag);
         laws.append(item);
       }
       if (!laws.children.length) laws.textContent = "No active laws yet — write the beast together.";
@@ -268,6 +598,8 @@
         const totalVotes = Math.max(1, crisis.existing_votes + crisis.proposed_votes);
         document.getElementById("crisis-existing-text").textContent = crisis.existing.raw_text;
         document.getElementById("crisis-proposed-text").textContent = crisis.proposed.raw_text;
+        renderCrisisPartPreview("crisis-existing-preview", crisis.existing.mutation.part_id, crisis.existing.mutation.color);
+        renderCrisisPartPreview("crisis-proposed-preview", crisis.proposed.mutation.part_id, crisis.proposed.mutation.color);
         document.getElementById("crisis-existing-count").textContent = `Votes: ${crisis.existing_votes} · Type 1`;
         document.getElementById("crisis-proposed-count").textContent = `Votes: ${crisis.proposed_votes} · Type 2`;
         document.getElementById("crisis-existing-fill").style.width = `${crisis.existing_votes / totalVotes * 100}%`;
@@ -316,11 +648,16 @@
         piece.style.background = colors[i % colors.length];
         piece.style.animationDelay = `${Math.random() * .45}s`;
         document.body.append(piece);
-        setTimeout(() => piece.remove(), 2300);
+        setTimeout(() => piece.remove(), 3000);
       }
     }
 
     function roar() {
+      const beast = document.getElementById("beast-wrap");
+      beast.classList.remove("roaring");
+      void beast.offsetWidth;
+      beast.classList.add("roaring");
+      setTimeout(() => beast.classList.remove("roaring"), 1500);
       try {
         const context = new AudioContext();
         const oscillator = context.createOscillator();
@@ -340,6 +677,7 @@
 
     function effect(name) {
       const scene = document.getElementById("scene");
+      if (["screen_shake", "screen_flash", "confetti", "beast_roar"].includes(name)) playCue(name);
       if (name === "screen_shake") {
         scene.classList.remove("shake");
         void scene.offsetWidth;
@@ -358,7 +696,10 @@
       socket.addEventListener("open", () => { reconnectDelay = 500; });
       socket.addEventListener("message", (message) => {
         const data = JSON.parse(message.data);
-        if (data.type === "snapshot") render(data);
+        if (data.type === "snapshot") {
+          render(data);
+          if (window.parent !== window) window.parent.postMessage({ type: "preview_overlay_ready" }, location.origin);
+        }
         else if (data.type === "highlight") {
           highlightedLawId = data.lawId;
           const item = [...document.querySelectorAll(".law")].find((entry) => entry.querySelector(".id")?.textContent.trim() === highlightedLawId);
@@ -374,7 +715,7 @@
         else if (data.type === "effect") {
           if (data.sim || data.effect === "sim_event") showSim();
           effect(data.effect);
-        }
+        } else if (data.type === "sound") playCue(data.cue);
       });
       socket.addEventListener("close", () => {
         setTimeout(connect, reconnectDelay);

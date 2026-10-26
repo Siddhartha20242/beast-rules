@@ -17,6 +17,14 @@ export const config = {
   ollamaModel: process.env.OLLAMA_MODEL ?? "gemma3:4b",
   chatReplies: process.env.CHAT_REPLIES === "on" ? "on" : "off",
   logEvents: process.env.LOG_EVENTS === "off" ? "off" : "on",
+  obsWsUrl: process.env.OBS_WS_URL ?? "ws://127.0.0.1:4455",
+  obsWsPassword: process.env.OBS_WS_PASSWORD ?? "",
+  obsScenes: {
+    obs_scene_1: process.env.OBS_SCENE_1 ?? "",
+    obs_scene_2: process.env.OBS_SCENE_2 ?? "",
+    obs_scene_3: process.env.OBS_SCENE_3 ?? ""
+  },
+  sceneReturnSeconds: positiveInteger(process.env.SCENE_RETURN_SECONDS, 6),
   twitchClientId: process.env.TWITCH_CLIENT_ID ?? "",
   twitchClientSecret: process.env.TWITCH_CLIENT_SECRET ?? "",
   twitchRedirectUri: process.env.TWITCH_REDIRECT_URI ?? "http://localhost:3001/auth/callback",

@@ -22,6 +22,7 @@
     "ajv": "^8.17.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "obs-websocket-js": "^5.0.8",
     "ws": "^8.18.0"
   },
   "devDependencies": {

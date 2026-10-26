@@ -37,7 +37,8 @@ describe("health handler", () => {
       broadcasterId: "123456",
       subscriptions: [{ type: "channel.chat.message", status: "active" }, { type: "channel.follow", status: "pending" }],
       compilerMode: "auto" as const,
-      activeLaws: 4
+      activeLaws: 4,
+      obsConnected: true
     };
     let result: unknown;
     let fetchedUrl = "";
@@ -56,7 +57,7 @@ describe("health handler", () => {
   it("reports Ollama unreachable without failing the health response", async () => {
     let result: unknown;
     const handler = createHealthHandler(() => ({
-      twitchConnected: false, broadcasterId: null, subscriptions: [], compilerMode: "template", activeLaws: 0
+      twitchConnected: false, broadcasterId: null, subscriptions: [], compilerMode: "template", activeLaws: 0, obsConnected: false
     }), "http://localhost:11434", async () => { throw new Error("offline"); });
     const response = { json(value: unknown) { result = value; return this; } };
     await handler({} as never, response as never, (() => undefined) as never);

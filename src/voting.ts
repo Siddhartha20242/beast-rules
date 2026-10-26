@@ -104,4 +104,12 @@ export class VotingManager {
     this.lastOutcome = outcome;
     return { ...outcome };
   }
+
+  cancelCurrent(): ProposalSnapshot | undefined {
+    const current = this.current;
+    if (!current) return undefined;
+    this.proposal = undefined;
+    this.lastOutcome = undefined;
+    return current;
+  }
 }

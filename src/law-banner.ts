@@ -13,6 +13,7 @@ export interface LawBannerPayload {
   part_id: PartId;
   color: Color;
   zone: Zone;
+  proposer_name?: string;
   related_law_text?: string;
   related_law_relation?: RelatedLawRelation;
   ends_at: number;
@@ -23,6 +24,7 @@ export interface LawBannerLaw {
   raw_text: string;
   mutation: { part_id: PartId; color: Color };
   zone: Zone;
+  proposer_name?: string;
 }
 
 export function createLawBannerPayload(
@@ -46,6 +48,7 @@ export function createLawBannerPayload(
     part_id: law.mutation.part_id,
     color: law.mutation.color,
     zone: law.zone,
+    ...(law.proposer_name && law.proposer_name !== "unknown" ? { proposer_name: law.proposer_name } : {}),
     ...(options.relatedLawText ? { related_law_text: options.relatedLawText } : {}),
     ...(options.relatedLawRelation ? { related_law_relation: options.relatedLawRelation } : {}),
     ends_at: now + (options.durationMs ?? 4000)

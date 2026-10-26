@@ -13,6 +13,7 @@ export interface ActiveLaw extends Rule {
   zone: Zone;
   timestamp: number;
   compiler_path: CompilerPath;
+  proposer_name?: string;
 }
 
 export interface HistoricalLaw extends ActiveLaw {
@@ -133,12 +134,12 @@ export class RuleEngine {
     };
   }
 
-  beginCrisis(rule: Rule, rawText: string, durationSeconds: number, compilerPath: CompilerPath = "parser"): CrisisStartResult {
+  beginCrisis(rule: Rule, rawText: string, durationSeconds: number, compilerPath: CompilerPath = "parser", proposerName = "unknown"): CrisisStartResult {
     if (this.crisis) return { status: "busy" };
     if (rule.status !== "ok") throw new Error(`Cannot add a rule with status ${rule.status}`);
     const zone = zoneForPart(rule.mutation.part_id);
     const existing = this.active.get(zone);
-    if (!existing) return { status: "added", law: this.add(rule, rawText, compilerPath).law };
+    if (!existing) return { status: "added", law: this.add(rule, rawText, compilerPath, proposerName).law };
 
     const now = this.clock();
     const proposed: ActiveLaw = {
@@ -147,7 +148,8 @@ export class RuleEngine {
       raw_text: rawText,
       zone,
       timestamp: now,
-      compiler_path: compilerPath
+      compiler_path: compilerPath,
+      proposer_name: proposerName
     };
     this.crisis = {
       zone,
@@ -199,7 +201,26 @@ export class RuleEngine {
     };
   }
 
-  add(rule: Rule, rawText: string, compilerPath: CompilerPath = "parser"): AddLawResult {
+  cancelCrisis(): CrisisSnapshot | undefined {
+    const current = this.currentCrisis;
+    if (!this.crisis) return undefined;
+    this.crisis = undefined;
+    this.persist();
+    return current;
+  }
+
+  clearAllLaws(): void {
+    this.nextId = 1;
+    this.active.clear();
+    this.history = [];
+    this.crisis = undefined;
+    this.eventCounts.clear();
+    this.chatTimes.clear();
+    this.processedMessageIds.clear();
+    this.persist();
+  }
+
+  add(rule: Rule, rawText: string, compilerPath: CompilerPath = "parser", proposerName = "unknown"): AddLawResult {
     if (rule.status !== "ok") throw new Error(`Cannot add a rule with status ${rule.status}`);
     const timestamp = this.clock();
     const zone = zoneForPart(rule.mutation.part_id);
@@ -209,7 +230,8 @@ export class RuleEngine {
       raw_text: rawText,
       zone,
       timestamp,
-      compiler_path: compilerPath
+      compiler_path: compilerPath,
+      proposer_name: proposerName
     };
     const previous = this.active.get(zone);
     let replaced: HistoricalLaw | undefined;

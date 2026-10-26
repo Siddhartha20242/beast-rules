@@ -111,3 +111,11 @@ Other registered event types include `channel.subscribe`, `channel.subscription.
 - Ollama must be installed and running locally for model rescue. A timed-out or unverifiable response falls back to the parser result.
 - The live Twitch setup requires a developer app, broadcaster authorization, and the listed scopes. Follow tests require a second account.
 - The `demo` npm script is a placeholder; a scripted demo replay is not implemented.
+
+## Streamer controls
+
+The broadcaster can use `!beast pause` and `!beast resume` in chat. While paused, law triggers and new proposals are ignored; the paused state is saved across restarts. The broadcaster or a moderator can use `!beast reset`, then send `!beast reset confirm` within 15 seconds from the same account to clear all active and historical laws. `!beast veto` cancels the current proposal vote or constitutional crisis. Normal viewers cannot use these commands.
+
+## OBS scene switching
+
+Constitution Beast uses OBS WebSocket to handle the existing `obs_scene_1`, `obs_scene_2`, and `obs_scene_3` law actions. In OBS, open **Tools → WebSocket Server Settings**, enable the WebSocket server, and set a password. Put the server address, password, and exact scene names in `.env` as `OBS_WS_URL`, `OBS_WS_PASSWORD`, `OBS_SCENE_1`, `OBS_SCENE_2`, and `OBS_SCENE_3`. Set `SCENE_RETURN_SECONDS` to control how long the selected scene remains active (default 6 seconds). Leave a scene mapping empty to disable that action. Chat rules can select only the numbered actions; they cannot supply OBS scene names. The sandbox and `/health` report whether the OBS connection is active.

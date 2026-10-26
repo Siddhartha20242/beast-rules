@@ -52,4 +52,12 @@ describe("VotingManager", () => {
     voting.startProposal("law-1", "proposer");
     expect(engineLikeEventHandler()).toBe("event handled");
   });
+
+  it("cancels the active proposal for a streamer veto", () => {
+    const voting = new VotingManager({ voteSeconds: 30, clock: () => 100 });
+    voting.startProposal("law-1", "proposer");
+    expect(voting.cancelCurrent()).toMatchObject({ proposalId: "law-1" });
+    expect(voting.current).toBeUndefined();
+    expect(voting.cancelCurrent()).toBeUndefined();
+  });
 });

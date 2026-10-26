@@ -11,6 +11,7 @@ export interface HealthState {
   subscriptions: HealthSubscription[];
   compilerMode: "auto" | "ollama" | "template";
   activeLaws: number;
+  obsConnected: boolean;
 }
 
 export interface HealthResponse extends HealthState {

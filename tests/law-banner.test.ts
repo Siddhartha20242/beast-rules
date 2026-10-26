@@ -5,7 +5,8 @@ const law = {
   id: "law-12",
   raw_text: "when someone subs grow wings and shake the screen",
   mutation: { part_id: "wings" as const, color: "yellow" as const },
-  zone: "back" as const
+  zone: "back" as const,
+  proposer_name: "viewer_one"
 };
 
 describe("law passed snapshot banner", () => {
@@ -26,6 +27,7 @@ describe("law passed snapshot banner", () => {
       part_id: "wings",
       color: "yellow",
       zone: "back",
+      proposer_name: "viewer_one",
       related_law_text: "follows grow tail",
       related_law_relation: "overruled",
       ends_at: 5000
@@ -41,5 +43,10 @@ describe("law passed snapshot banner", () => {
       relatedLawRelation: "challenged"
     });
     expect(payload).toMatchObject({ event: "passed", related_law_relation: "challenged", ends_at: 4000 });
+  });
+
+  it("omits the proposer attribution for a legacy law without a recorded proposer", () => {
+    const payload = createLawBannerPayload("passed", { ...law, proposer_name: undefined }, { now: 1000 });
+    expect(payload).not.toHaveProperty("proposer_name");
   });
 });
