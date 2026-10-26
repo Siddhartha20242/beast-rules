@@ -12,6 +12,8 @@ export interface LawBannerPayload {
   law_id: string;
   article?: number;
   law_title: string;
+  /** One plain sentence about what happened to the beast: "The beast grew yellow wings." */
+  consequence: string;
   vote_summary?: string;
   law_text: string;
   part_id: PartId;
@@ -29,6 +31,14 @@ export interface LawBannerLaw extends Rule {
   proposer_name?: string;
 }
 
+function consequenceFor(event: LawBannerEvent, headline: string, law: LawBannerLaw): string {
+  const thing = `${law.mutation.color} ${law.mutation.part_id.replace(/_/g, " ")}`;
+  if (headline.includes("REPEALED")) return `The beast lost its ${thing}.`;
+  if (event === "crisis_resolved") return `The beast keeps its ${thing}.`;
+  if (headline.includes("CRISIS")) return `A new ${thing} is fighting for the ${law.zone}.`;
+  return `The beast grew ${thing}.`;
+}
+
 export function createLawBannerPayload(
   event: LawBannerEvent,
   law: LawBannerLaw,
@@ -43,13 +53,15 @@ export function createLawBannerPayload(
   } = {}
 ): LawBannerPayload {
   const now = options.now ?? Date.now();
+  const headline = options.headline ?? (event === "passed" ? "LAW PASSED" : "CRISIS RESOLVED");
   return {
     banner_id: `${event}:${law.id}:${now}`,
     event,
-    headline: options.headline ?? (event === "passed" ? "LAW PASSED" : "CRISIS RESOLVED"),
+    headline,
     law_id: law.id,
     ...(Number.isInteger(Number(law.id.replace(/^law-/, ""))) ? { article: Number(law.id.replace(/^law-/, "")) } : {}),
     law_title: lawTitle(law),
+    consequence: consequenceFor(event, headline, law),
     ...(options.voteSummary ? { vote_summary: options.voteSummary } : {}),
     law_text: describeRule({ status: law.status, trigger: law.trigger, action: law.action, mutation: law.mutation }),
     part_id: law.mutation.part_id,

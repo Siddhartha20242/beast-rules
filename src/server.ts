@@ -148,12 +148,23 @@ function compilerLabel(path: CompilerPath): string {
   return path;
 }
 
+// While a crisis is about to resolve, the overlay is held on its last picture for a moment of silence.
+const hushMs = 1500;
+let lastSnapshotJson = "";
+let holdSnapshotUntil = 0;
+
+function snapshotWire(): string {
+  if (Date.now() < holdSnapshotUntil && lastSnapshotJson) return lastSnapshotJson;
+  lastSnapshotJson = JSON.stringify(makeSnapshot());
+  return lastSnapshotJson;
+}
+
 function sendSnapshot(socket: WebSocket): void {
-  if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(makeSnapshot()));
+  if (socket.readyState === socket.OPEN) socket.send(snapshotWire());
 }
 
 function broadcastSnapshot(): void {
-  const message = JSON.stringify(makeSnapshot());
+  const message = snapshotWire();
   for (const socket of clients) if (socket.readyState === socket.OPEN) socket.send(message);
 }
 
@@ -875,9 +886,12 @@ setInterval(() => {
   const crisisOutcome = engine.resolveCrisisIfExpired();
   if (crisisOutcome) {
     crowdScheduledFor.delete(`crisis:${crisisOutcome.winner_choice === "proposed" ? crisisOutcome.winner.id : crisisOutcome.loser.id}`);
-    broadcastSound("crisis_resolved");
+    // The silence beat: freeze the overlay on the crisis cards and go quiet, then reveal the result.
+    holdSnapshotUntil = Date.now() + hushMs;
+    broadcastSound("crisis_hush");
     const newLawWon = crisisOutcome.winner_choice === "proposed";
     lawBanner = createLawBannerPayload("crisis_resolved", crisisOutcome.winner, {
+      now: Date.now() + hushMs,
       headline: newLawWon ? "NEW LAW SURVIVES" : "EXISTING LAW SURVIVES",
       voteSummary: `survived ${newLawWon ? crisisOutcome.proposed_votes : crisisOutcome.existing_votes}-${newLawWon ? crisisOutcome.existing_votes : crisisOutcome.proposed_votes}`,
       relatedLaw: crisisOutcome.loser,
@@ -892,9 +906,13 @@ setInterval(() => {
       proposed_votes: crisisOutcome.proposed_votes
     });
     if (newLawWon) logDecision("law_enacted", { id: crisisOutcome.winner.id, zone: crisisOutcome.winner.zone, part: crisisOutcome.winner.mutation.part_id });
-    if (newLawWon) triggerLawAction(crisisOutcome.winner.action.type, true);
-    showNotice(newLawWon ? "The new law survives the constitutional crisis." : "The existing law survives the constitutional crisis.");
-    broadcastSnapshot();
+    setTimeout(() => {
+      holdSnapshotUntil = 0;
+      broadcastSound("crisis_resolved");
+      if (newLawWon) triggerLawAction(crisisOutcome.winner.action.type, true);
+      showNotice(newLawWon ? "The new law survives the constitutional crisis." : "The existing law survives the constitutional crisis.");
+      broadcastSnapshot();
+    }, hushMs);
     return;
   }
 

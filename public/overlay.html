@@ -10,6 +10,9 @@
     html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent !important; background-color: transparent !important; color: #f7f7ff; }
     body { position: relative; }
     #scene { position: absolute; inset: 0; display: grid; place-items: center; }
+    body.portrait #hud, body.portrait #notice, body.portrait #law-toasts, body.portrait #law-banner, body.portrait #vote-ticker, body.portrait #crisis-banner, body.portrait #laws-panel, body.portrait #info-panel, body.portrait #sound-hint, body.portrait #paused-badge, body.portrait #twitch-dot, body.portrait #sim-tag, body.portrait #flash { display: none !important; }
+    body.portrait *, body.portrait *::before, body.portrait *::after { transition: none !important; }
+    body.portrait #beast-wrap { width: min(100vw, 100vh); top: 0; transform: scale(1.12); transform-origin: center 52%; }
     #beast-wrap { position: absolute; width: min(72vh, 72vw, 1000px); aspect-ratio: 1; top: 0; filter: drop-shadow(0 18px 18px #080b1c44); transform: scale(var(--evolution-scale, 1)); transform-origin: center bottom; transition: transform .55s ease, filter .55s ease; }
     #beast { width: 100%; height: 100%; overflow: visible; }
     .body-shape { fill: url(#body-gradient); stroke: #202943; stroke-width: 4; stroke-linejoin: round; }
@@ -39,6 +42,7 @@
     #info-panel.show { display: block; }
     #info-panel-title { color: #ffe37b; font-size: 13px; font-weight: 900; letter-spacing: .1em; margin-bottom: 6px; }
     .info-panel-row { margin-top: 3px; padding: 3px 9px; border-radius: 9px; background: #262d4a; font-size: 11.5px; font-weight: 600; color: #eef0ff; line-height: 1.3; }
+    .law-toast-sponsor { color: var(--sponsor-color, #ffd166); font-size: 17px; font-weight: 950; letter-spacing: .02em; text-shadow: 0 0 14px var(--sponsor-color, #ffd166); margin-bottom: 3px; }
     .laws-panel-title { color: #ffe37b; font-weight: 900; margin-right: 6px; }
     #tier-label { fill:#fff; stroke:#202943; stroke-width:2; paint-order:stroke; font:700 8px Inter,system-ui,sans-serif; text-anchor:middle; letter-spacing:.15px; }
     .part { opacity: 0; transition: opacity .45s ease; }
@@ -82,7 +86,7 @@
     #law-banner { display:none; position:absolute; z-index:6; top:12px; left:50%; transform:translateX(-50%); width:min(1040px,calc(100vw - 24px)); padding:8px 14px; border:1px solid #ffd166; border-radius:12px; background:#151a2bee; box-shadow:0 6px 24px #05071399; pointer-events:none; }
     #law-banner.show { display:block; }
     #law-banner-headline { margin-bottom:3px; color:#ffd166; font-size:10px; font-weight:950; letter-spacing:.09em; text-transform:uppercase; }
-    #law-banner-credit { margin-bottom:3px; color:#aeb8da; font-size:10px; font-weight:700; }
+    #law-banner-credit { margin-bottom:4px; color:#fff6d6; font-size:14px; font-weight:800; line-height:1.25; }
     #law-banner-line { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:10px; min-width:0; }
     #law-banner-text { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:clamp(12px,1.3vw,17px); font-weight:800; }
     #law-banner-arrow { color:#ffd166; font-size:19px; font-weight:900; }
@@ -321,7 +325,9 @@
     let audioContext;
     let masterGain;
     const soundMode = new URLSearchParams(location.search).get("sound");
-    const soundDisabled = soundMode === "off";
+    const portraitMode = new URLSearchParams(location.search).get("portrait") === "1";
+    if (portraitMode) document.body.classList.add("portrait");
+    const soundDisabled = soundMode === "off" || portraitMode;
     const obsSoundMode = soundMode === "on";
 
     function audioMasterSettings() {
@@ -389,6 +395,11 @@
           [1047, 1319, 1568, 2093].forEach((frequency, index) => playTone(frequency, .2, { type: "sine", delay: index * .13, volume: .12 }));
           break;
         case "beast_roar": playTone(92, .9, { type: "sawtooth", endFrequency: 38, volume: .2 }); break;
+        case "crisis_hush":
+          // The alarm stops and one low tone holds the room before the verdict.
+          alarmHushUntil = Date.now() + 1700;
+          playTone(52, 1.45, { type: "sine", volume: .26 });
+          break;
         case "scar_crack":
           playTone(70, .42, { type: "sawtooth", endFrequency: 38, volume: .3 });
           playTone(1900, .05, { type: "square", delay: .02, volume: .1 });
@@ -496,10 +507,11 @@
     });
     document.addEventListener("visibilitychange", () => document.body.classList.toggle("page-hidden", document.hidden));
 
+    let alarmHushUntil = 0;
     function setCrisisAlarm(active) {
       if (active && !alarmTimer && !soundDisabled) {
         playCue("crisis_alarm_pulse");
-        alarmTimer = setInterval(() => playCue("crisis_alarm_pulse"), 1100);
+        alarmTimer = setInterval(() => { if (Date.now() >= alarmHushUntil) playCue("crisis_alarm_pulse"); }, 1100);
       } else if (!active && alarmTimer) {
         clearInterval(alarmTimer);
         alarmTimer = undefined;
@@ -613,11 +625,10 @@
       document.getElementById("law-banner-headline").textContent = banner.headline;
       const credit = document.getElementById("law-banner-credit");
       const captionParts = [];
-      if (banner.article) captionParts.push(`Article ${banner.article}`);
-      if (banner.law_title) captionParts.push(banner.law_title);
+      captionParts.push(banner.consequence || (banner.law_title ? `Article ${banner.article ?? "?"}: ${banner.law_title}` : ""));
       if (banner.vote_summary) captionParts.push(banner.vote_summary);
-      if (banner.proposer_name && banner.proposer_name !== "unknown") captionParts.push(`sponsor ${banner.proposer_name}`);
-      credit.textContent = captionParts.join(" · ");
+      if (banner.proposer_name && banner.proposer_name !== "unknown") captionParts.push(`written by ${banner.proposer_name}`);
+      credit.textContent = captionParts.filter(Boolean).join(" · ");
       credit.hidden = !credit.textContent;
       document.getElementById("law-banner-text").textContent = banner.law_text;
       document.getElementById("law-banner-part").textContent = `${banner.part_id.replaceAll("_", " ").toUpperCase()} (${banner.color}, ${banner.zone})`;
@@ -871,6 +882,13 @@
       lawsPanelTimer = setTimeout(() => panel.classList.remove("show"), Math.max(0, until - Date.now()));
     }
 
+    // Every sponsor gets their own color, derived from their name, so the shout reads as a person.
+    function sponsorColor(name) {
+      let hash = 0;
+      for (const character of String(name)) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+      return `hsl(${hash % 360} 85% 68%)`;
+    }
+
     function renderLawToasts(toasts) {
       const container = document.getElementById("law-toasts");
       const now = Date.now();
@@ -894,6 +912,13 @@
         actor.className = "law-toast-actor";
         actor.textContent = `${toast.simulated ? "SIM" : `triggered by ${toast.triggered_by || "Twitch"}`}${toast.sponsor ? ` · sponsor ${toast.sponsor}` : ""}`;
         card.append(heading, description, actor);
+        if (toast.sponsor) {
+          const shout = document.createElement("div");
+          shout.className = "law-toast-sponsor";
+          shout.style.setProperty("--sponsor-color", sponsorColor(toast.sponsor));
+          shout.textContent = `⚖ ${toast.sponsor}'s law!`;
+          card.prepend(shout);
+        }
         container.append(card);
       }
       clearTimeout(lawToastTimer);
@@ -994,6 +1019,8 @@
       socket.addEventListener("error", () => socket.close());
     }
     connect();
+    // A still portrait (recap card, constitution cover) must not wait for the live connection to show the beast.
+    if (portraitMode) fetch("/api/state").then((response) => response.json()).then((state) => render(state)).catch(() => undefined);
   </script>
 </body>
 </html>

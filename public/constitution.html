@@ -13,6 +13,7 @@
     h1 { font-size: clamp(28px, 6vw, 40px); text-align: center; margin: 0 0 8px; letter-spacing: .01em; }
     .preamble { text-align: center; font-style: italic; color: var(--muted); margin: 0 auto 28px; max-width: 560px; }
     .cover { text-align: center; padding: 36px 20px 34px; margin-bottom: 34px; border: 2px solid var(--rule); border-radius: 18px; background: linear-gradient(180deg, rgba(255, 209, 102, .10), transparent); }
+    .cover .portrait { color-scheme: dark; display: block; width: min(320px, 70vw); height: min(320px, 70vw); border: 0; margin: -6px auto 4px; background: transparent; }
     .cover .kicker { font: 700 12px/1 system-ui, sans-serif; letter-spacing: .22em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
     .cover h1 { font-size: clamp(38px, 9vw, 64px); margin: 0 0 6px; }
     .cover .temperament { font: 600 16px/1.4 system-ui, sans-serif; color: var(--muted); margin-bottom: 18px; }
@@ -38,6 +39,7 @@
   <main>
     <section class="cover" id="cover">
       <div class="kicker">Ratified by chat</div>
+      <iframe class="portrait" src="/overlay.html?obs=1&portrait=1" title="The beast as it looks today" loading="lazy"></iframe>
       <h1 id="title">Constitution</h1>
       <div class="temperament" id="cover-temperament"></div>
       <div class="ratified" id="cover-ratified"></div>

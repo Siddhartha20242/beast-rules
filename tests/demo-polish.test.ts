@@ -111,3 +111,20 @@ describe("constitution cover", () => {
     });
   });
 });
+
+describe("banner consequence sentence", () => {
+  it("leads with what happened to the beast", async () => {
+    const engine = engineAt(() => 1_700_000_000_000);
+    const { law } = engine.add(await rule("when someone subs grow wings and shake the screen"), "x", "parser", "alice");
+    expect(createLawBannerPayload("passed", law).consequence).toBe("The beast grew yellow wings.");
+    expect(createLawBannerPayload("passed", law, { headline: "LAW PASSED · CRISIS VOTE" }).consequence).toBe("A new yellow wings is fighting for the back.");
+    expect(createLawBannerPayload("crisis_resolved", law, { headline: "NEW LAW SURVIVES" }).consequence).toBe("The beast keeps its yellow wings.");
+    expect(createLawBannerPayload("crisis_resolved", law, { headline: "LAW REPEALED" }).consequence).toBe("The beast lost its yellow wings.");
+  });
+
+  it("writes part names with spaces, never underscores", async () => {
+    const engine = engineAt(() => 1_700_000_000_000);
+    const { law } = engine.add(await rule("when a hype train starts throw confetti and grow extra arms"), "x", "parser", "bob");
+    expect(createLawBannerPayload("passed", law).consequence).toBe("The beast grew yellow extra arms.");
+  });
+});

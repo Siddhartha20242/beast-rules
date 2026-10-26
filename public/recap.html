@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1200">
+  <title>Beast Rules — Recap card</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { color-scheme: dark; }
+    html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: #12132a; }
+    body { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #eef0ff; }
+    .card { position: relative; width: 1200px; height: 630px; display: grid; grid-template-columns: 560px 1fr; background: radial-gradient(900px 500px at 25% 40%, #2a2d63 0%, #12132a 70%); border: 6px solid #343868; }
+    .art { position: relative; display: grid; place-items: center; }
+    .art iframe { width: 540px; height: 540px; border: 0; background: transparent; color-scheme: dark; }
+    .info { padding: 44px 48px 36px 10px; display: flex; flex-direction: column; min-width: 0; }
+    .kicker { font-size: 15px; font-weight: 800; letter-spacing: .24em; text-transform: uppercase; color: #ffd166; }
+    h1 { font-family: Georgia, "Times New Roman", serif; font-size: 62px; line-height: 1.02; margin: 10px 0 6px; }
+    .temper { font-size: 20px; color: #b9bfe6; font-weight: 600; margin-bottom: 22px; }
+    .stats { display: flex; gap: 14px; margin-bottom: 22px; }
+    .stat { background: #1c1f48; border: 1px solid #343868; border-radius: 14px; padding: 10px 16px; min-width: 120px; }
+    .stat b { display: block; font-size: 32px; color: #ffd166; line-height: 1.1; }
+    .stat span { font-size: 13px; color: #b9bfe6; letter-spacing: .05em; text-transform: uppercase; }
+    h2 { font-size: 13px; letter-spacing: .2em; text-transform: uppercase; color: #8d94c9; margin: 0 0 8px; }
+    ul { list-style: none; margin: 0 0 18px; padding: 0; }
+    li { font-size: 20px; padding: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    li small { color: #8d94c9; font-size: 15px; margin-left: 8px; }
+    .proposers { font-size: 18px; color: #dfe2ff; }
+    .foot { margin-top: auto; display: flex; justify-content: space-between; align-items: baseline; font-size: 17px; color: #b9bfe6; }
+    .foot strong { color: #ffd166; font-family: Georgia, serif; font-size: 22px; }
+  </style>
+</head>
+<body>
+  <main class="card" id="card">
+    <div class="art"><iframe src="/overlay.html?obs=1&portrait=1" title="The beast"></iframe></div>
+    <div class="info">
+      <div class="kicker">Signed by chat</div>
+      <h1 id="name">The Beast</h1>
+      <div class="temper" id="temper"></div>
+      <div class="stats">
+        <div class="stat"><b id="in-force">0</b><span>in force</span></div>
+        <div class="stat"><b id="written">0</b><span>written</span></div>
+        <div class="stat"><b id="scars">0</b><span>scars</span></div>
+      </div>
+      <h2>Laws in force</h2>
+      <ul id="laws"></ul>
+      <h2>Top lawmakers</h2>
+      <div class="proposers" id="proposers"></div>
+      <div class="foot"><span id="date"></span><strong>beast rules</strong></div>
+    </div>
+  </main>
+  <script>
+    (async function () {
+      try {
+        const doc = await (await fetch("/api/constitution")).json();
+        const cover = doc.cover || {};
+        document.getElementById("name").textContent = cover.beast_name || "The Beast";
+        document.getElementById("temper").textContent = cover.temperament || "";
+        document.getElementById("in-force").textContent = String(doc.summary.active);
+        document.getElementById("written").textContent = String(cover.laws_written ?? doc.articles.length);
+        document.getElementById("scars").textContent = String(Object.values(doc.scars || {}).reduce((sum, count) => sum + count, 0));
+        const list = document.getElementById("laws");
+        const active = doc.articles.filter((article) => article.status === "active").slice(0, 5);
+        if (!active.length) {
+          const li = document.createElement("li");
+          li.textContent = "No laws yet.";
+          list.append(li);
+        }
+        for (const article of active) {
+          const li = document.createElement("li");
+          li.textContent = article.title;
+          if (article.proposer) {
+            const by = document.createElement("small");
+            by.textContent = `by ${article.proposer}`;
+            li.append(by);
+          }
+          list.append(li);
+        }
+        const counts = new Map();
+        for (const article of doc.articles) if (article.proposer) counts.set(article.proposer, (counts.get(article.proposer) || 0) + 1);
+        const top = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 3);
+        document.getElementById("proposers").textContent = top.length ? top.map(([name, count]) => `${name} (${count})`).join(" · ") : "Nobody yet";
+        document.getElementById("date").textContent = cover.ratified_at
+          ? `Ratified ${new Date(cover.ratified_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}`
+          : "Not yet ratified";
+      } catch {
+        document.getElementById("name").textContent = "Server not running";
+      }
+    })();
+  </script>
+</body>
+</html>

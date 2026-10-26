@@ -65,27 +65,7 @@ The real TemplateCompiler produces this schema-valid rule:
 
 When the vote passes, the overlay shows the law-passed banner and pulses the wings; a subscription then triggers the screen shake.
 
-## What works today
-
-- Schema-validated template parsing, with 28/28 contract cases passing; optional local Ollama rescue uses a verifier and falls back safely.
-- Persistent proposals, voting, zone replacement, constitutional crisis votes, streamer pause/resume/reset/veto controls, and overlay snapshots.
-- Transparent SVG beast overlay with five evolution tiers, all 15 parts, law-passed and crisis-resolution banners, proposer credits, and a live vote ticker.
-- Synthesized Web Audio cues (no audio files), plus sandbox crowd simulation with adjustable yes bias and direct buttons for the four overlay effects.
-- Twitch EventSub WebSocket integration for chat, follow, subscription, gift, cheer, raid, and hype-train events; chat command translation and fixtures are tested. `/health` reports service state.
-- OBS scene actions mapped to server-configured scene names; the adapter is tested with mocks only. Live OBS switching has not been verified.
-- **Numbered ballot.** Every `BALLOT_MINUTES` (default 5, `0` turns it off) the overlay offers three suggested laws for `BALLOT_SECONDS` (default 20). Chat types `1`, `2` or `3`; the winner is enacted with no second vote (a tie goes to the lower number, and no votes means no winner). Suggestions are built deterministically from templates, run through the real parser (anything that does not compile is discarded), favour empty body zones and recent event types, and never repeat a part already on the beast. Only canonical descriptions are shown.
-- **`!laws` and `!repeal`.** `!laws` shows a six-second panel of the active laws; `!repeal 3` opens a yes/no vote to remove `law-3` (same rules as a proposal: one vote at a time, per-viewer cooldown, blocked while paused, during a crisis or during a ballot). A repealed law moves to history as "repealed" and its zone is free again.
-- Malformed requests to the sandbox API get a short JSON error, never a stack trace.
-- **Captions without a narrator.** Every new law's banner carries its own caption: article number, the law's title, the vote result ("passed 3-1", "won the ballot 3 of 4 votes", "survived 3-1") and its sponsor. When a law fires, the toast names the sponsor too.
-- **The beast wants things.** It shows one visible desire derived from its mood and gaps ("Pebble wants a law about raids") and reacts when chat satisfies it ("Pebble is pleased"). A resolved crisis or repeal draws a crack on the beast with a thud.
-- **A cover for the constitution.** `/constitution.html` opens with the beast's name, temperament, the date chat ratified it and an integrity score (the share of all laws ever written that are still in force).
-- **`npm run demo`** plays the whole story by itself against an isolated copy of the app: it starts its own server on its own port with a temporary data folder, never touches your real beast or Twitch, and runs a law, a firing event, refusals, a crisis, a ballot, a repeal, a naming vote and the constitution. The viewers are simulated (viewer_1 to viewer_5) and events carry a SIM tag.
-- **The beast as a character.** Chat names it once through a vote among a fixed list of names (`!name`; viewer text can never become the name). Every law has a canonical title built from validated values ("Follower's Yellow Horns"). The beast shows a temperament computed from its laws and history: ferocity (Fierce, Wary or Calm, from aggressive parts and loud effects) and order (Orderly, Restless or Chaotic, from how many laws were repealed or overruled). Its idle animation follows its mood.
-- **Scars.** A law that is repealed or loses a crisis leaves a crack on the beast in that body zone (up to three per zone), so the beast is a record of conflict, not just accumulation.
-- **The constitution.** `!constitution` shows the active laws on the overlay, and `/constitution.html` is a printable document listing every law ever written with its title, proposer, date and status (in force, repealed or overruled).
-- **The beast's tongue.** Refusals speak as the beast ("The beast cannot hear that…") and `!tongue` lists its whole vocabulary. The closed vocabulary is the beast's language: it cannot embody what it cannot say.
-
-## Measured compile accuracy
+## How we measured compile accuracy
 
 | Set | Parser alone | With local-model rescue | Note |
 | --- | ---: | ---: | --- |
@@ -134,9 +114,31 @@ Run `npm run eval -- --file tests/heldout3.json --verbose` to reproduce. The mod
 
 </details>
 
+## What works today
+
+- Schema-validated template parsing, with 28/28 contract cases passing; optional local Ollama rescue uses a verifier and falls back safely.
+- Persistent proposals, voting, zone replacement, constitutional crisis votes, streamer pause/resume/reset/veto controls, and overlay snapshots.
+- Transparent SVG beast overlay with five evolution tiers, all 15 parts, law-passed and crisis-resolution banners, proposer credits, and a live vote ticker.
+- Synthesized Web Audio cues (no audio files), plus sandbox crowd simulation with adjustable yes bias and direct buttons for the four overlay effects.
+- Twitch EventSub WebSocket integration for chat, follow, subscription, gift, cheer, raid, and hype-train events; chat command translation and fixtures are tested. `/health` reports service state.
+- OBS scene actions mapped to server-configured scene names; the adapter is tested with mocks only. Live OBS switching has not been verified.
+- **Numbered ballot.** Every `BALLOT_MINUTES` (default 5, `0` turns it off) the overlay offers three suggested laws for `BALLOT_SECONDS` (default 20). Chat types `1`, `2` or `3`; the winner is enacted with no second vote (a tie goes to the lower number, and no votes means no winner). Suggestions are built deterministically from templates, run through the real parser (anything that does not compile is discarded), favour empty body zones and recent event types, and never repeat a part already on the beast. Only canonical descriptions are shown.
+- **`!laws` and `!repeal`.** `!laws` shows a six-second panel of the active laws; `!repeal 3` opens a yes/no vote to remove `law-3` (same rules as a proposal: one vote at a time, per-viewer cooldown, blocked while paused, during a crisis or during a ballot). A repealed law moves to history as "repealed" and its zone is free again.
+- Malformed requests to the sandbox API get a short JSON error, never a stack trace.
+- **Captions without a narrator.** Every new law's banner carries its own caption: article number, the law's title, the vote result ("passed 3-1", "won the ballot 3 of 4 votes", "survived 3-1") and its sponsor. When a law fires, the toast names the sponsor too.
+- **The beast wants things.** It shows one visible desire derived from its mood and gaps ("Pebble wants a law about raids") and reacts when chat satisfies it ("Pebble is pleased"). A resolved crisis or repeal draws a crack on the beast with a thud.
+- **A cover for the constitution.** `/constitution.html` opens with the beast's name, temperament, the date chat ratified it and an integrity score (the share of all laws ever written that are still in force).
+- **A shareable recap card.** `/recap.html` is a 1200x630 card with the beast's portrait, its name and temperament, laws in force, scars and top lawmakers. With the server running, `npm run recap` saves it as a PNG (it needs Chrome, Chromium or Edge) for Discord or Twitch.
+- **A moment of silence before the verdict.** When a crisis ends, the overlay holds on the two cards for 1.5 seconds with the alarm cut and one low tone, then reveals the result and the crack. Law banners lead with what happened ("The beast grew yellow wings. · passed 3-1 · written by viewer_2"), and the law's sponsor gets a loud, colored shout when it fires.
+- **`npm run demo`** plays the whole story by itself against an isolated copy of the app: it starts its own server on its own port with a temporary data folder, never touches your real beast or Twitch, and runs a law, a firing event, refusals, a crisis, a ballot, a repeal, a naming vote and the constitution. The viewers are simulated (viewer_1 to viewer_5) and events carry a SIM tag.
+- **The beast as a character.** Chat names it once through a vote among a fixed list of names (`!name`; viewer text can never become the name). Every law has a canonical title built from validated values ("Follower's Yellow Horns"). The beast shows a temperament computed from its laws and history: ferocity (Fierce, Wary or Calm, from aggressive parts and loud effects) and order (Orderly, Restless or Chaotic, from how many laws were repealed or overruled). Its idle animation follows its mood.
+- **Scars.** A law that is repealed or loses a crisis leaves a crack on the beast in that body zone (up to three per zone), so the beast is a record of conflict, not just accumulation.
+- **The constitution.** `!constitution` shows the active laws on the overlay, and `/constitution.html` is a printable document listing every law ever written with its title, proposer, date and status (in force, repealed or overruled).
+- **The beast's tongue.** Refusals speak as the beast ("The beast cannot hear that…") and `!tongue` lists its whole vocabulary. The closed vocabulary is the beast's language: it cannot embody what it cannot say.
+
 ## How Codex built this
 
-This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **266 tests across 20 files**. Codex ran out of free credits near the end, so several late changes were written with a different AI assistant instead and are labelled that way in the log: the network-resilience fix, the ballot and repeal features, the chat-command parser, and the beast character and constitution features. The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
+This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **268 tests across 20 files**. Codex ran out of free credits near the end, so several late changes were written with a different AI assistant instead and are labelled that way in the log: the network-resilience fix, the ballot and repeal features, the chat-command parser, and the beast character and constitution features. The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
 
 Three examples of problems found and resolved: [the parser initially emitted `eventType` instead of schema-required `event_type`](docs/CODEX_LOG.md#roadmap-step-2--templatecompiler-only); [npm's shared cache rejected writes, so installation was retried with a temporary cache](docs/CODEX_LOG.md#streamer-controls-and-obs-scene-switching); and [the preview initially missed its first frame, so it was rerun from the start and all 15 parts were verified](docs/CODEX_LOG.md#sandbox-crowd-bias-reliable-part-preview-and-legacy-proposer-labels). **No runtime model call goes through Codex:** law compilation uses the local parser and, when configured, a local Ollama server.
 
