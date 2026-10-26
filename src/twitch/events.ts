@@ -47,14 +47,16 @@ export function translateTwitchEvent(name: TwitchEventName, payload: unknown, no
   return { event_type: eventType[name], timestamp, message_id: messageId };
 }
 
-export function chatMessageDetails(payload: unknown): { userId: string; message: string; messageId: string } {
+export function chatMessageDetails(payload: unknown): { userId: string; userName: string; message: string; messageId: string } {
   const outer = bag(payload);
   const event = bag(outer.event ?? payload);
   const message = bag(event.message);
   const chatter = bag(event.chatter);
   const text = typeof message.text === "string" ? message.text : typeof event.messageText === "string" ? event.messageText : "";
+  const userId = firstString(event.chatter_user_id, event.chatterId, chatter.user_id) ?? "unknown";
   return {
-    userId: firstString(event.chatter_user_id, event.chatterId, chatter.user_id) ?? "unknown",
+    userId,
+    userName: firstString(event.chatter_user_name, event.chatterDisplayName, event.user_name, event.userName, chatter.user_name, chatter.name) ?? userId,
     message: text,
     messageId: translateTwitchEvent("chat", payload).message_id ?? ""
   };

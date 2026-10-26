@@ -16,6 +16,7 @@ export const config = {
   ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
   ollamaModel: process.env.OLLAMA_MODEL ?? "gemma3:4b",
   chatReplies: process.env.CHAT_REPLIES === "on" ? "on" : "off",
+  logEvents: process.env.LOG_EVENTS === "off" ? "off" : "on",
   twitchClientId: process.env.TWITCH_CLIENT_ID ?? "",
   twitchClientSecret: process.env.TWITCH_CLIENT_SECRET ?? "",
   twitchRedirectUri: process.env.TWITCH_REDIRECT_URI ?? "http://localhost:3001/auth/callback",

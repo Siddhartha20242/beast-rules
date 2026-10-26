@@ -4,6 +4,8 @@ import { ApiClient } from "@twurple/api";
 import { RefreshingAuthProvider, type AccessToken } from "@twurple/auth";
 import { EventSubWsListener } from "@twurple/eventsub-ws";
 import { config } from "../config.js";
+import type { HealthSubscription } from "../health.js";
+import { formatEventSubLogLine } from "./logging.js";
 import type { TwitchEventName } from "./events.js";
 
 const tokenPath = resolve("data/twitch-token.json");
@@ -12,11 +14,16 @@ const requiredScopes = ["user:read:chat", "moderator:read:followers", "channel:r
 export interface TwitchRuntimeOptions {
   onEvent: (name: TwitchEventName, event: unknown) => void;
   onStatus?: (message: string) => void;
+  onConnectionChange?: (connected: boolean, broadcasterId: string) => void;
+  onSubscriptionsChange?: (subscriptions: HealthSubscription[]) => void;
 }
 
 export interface TwitchRuntime {
   stop: () => void;
   sendChatReply: (message: string) => void;
+  readonly broadcasterId: string;
+  readonly isConnected: boolean;
+  getSubscriptions: () => HealthSubscription[];
 }
 
 export async function startTwitchRuntime(options: TwitchRuntimeOptions): Promise<TwitchRuntime | undefined> {
@@ -34,7 +41,7 @@ export async function startTwitchRuntime(options: TwitchRuntimeOptions): Promise
 
   const auth = new RefreshingAuthProvider({ clientId: config.twitchClientId, clientSecret: config.twitchClientSecret });
   auth.onRefresh(async (_userId, refreshed) => writeFile(tokenPath, `${JSON.stringify(refreshed, null, 2)}\n`, { mode: 0o600 }));
-  auth.onRefreshFailure((_userId, error) => options.onStatus?.(`Twitch token refresh failed: ${error.message}`));
+  auth.onRefreshFailure(() => options.onStatus?.("Twitch token refresh failed. Re-run npm run twitch:auth."));
   const tokenUserId = await auth.addUserForToken(token);
   const broadcasterId = config.twitchBroadcasterId || tokenUserId;
   const apiClient = new ApiClient({ authProvider: auth });
@@ -44,19 +51,61 @@ export async function startTwitchRuntime(options: TwitchRuntimeOptions): Promise
   if (missing.length) options.onStatus?.(`Twitch token is missing scopes: ${missing.join(", ")}. Re-run npm run twitch:auth.`);
 
   const listener = new EventSubWsListener({ apiClient, ...(config.twitchEventSubWsUrl ? { url: config.twitchEventSubWsUrl } : {}) });
-  listener.onUserSocketReady((userId, sessionId) => options.onStatus?.(`EventSub WebSocket ready for ${userId} (session ${sessionId}).`));
-  listener.onUserSocketDisconnect((_userId, error) => {
-    if (error) options.onStatus?.(`EventSub WebSocket disconnected: ${error.message}`);
+  let connected = false;
+  const subscriptions: Array<{ type: string; status: string; handle: ReturnType<EventSubWsListener["onChannelFollow"]> }> = [];
+  const getSubscriptions = () => subscriptions.map(({ type, status }) => ({ type, status }));
+  const publishSubscriptions = () => options.onSubscriptionsChange?.(getSubscriptions());
+  const register = (type: string, handle: ReturnType<EventSubWsListener["onChannelFollow"]>) => {
+    subscriptions.push({ type, status: "pending", handle });
+  };
+  listener.onSubscriptionActivate((subscription) => {
+    const record = subscriptions.find((item) => item.handle === subscription);
+    if (record) { record.status = "active"; publishSubscriptions(); }
   });
-  const on = (name: TwitchEventName) => (event: unknown) => options.onEvent(name, event);
-  listener.onChannelChatMessage(broadcasterId, broadcasterId, on("chat"));
-  listener.onChannelFollow(broadcasterId, broadcasterId, on("follow"));
-  listener.onChannelSubscription(broadcasterId, on("subscribe"));
-  listener.onChannelSubscriptionGift(broadcasterId, on("gift"));
-  listener.onChannelCheer(broadcasterId, on("cheer"));
-  listener.onChannelRaidTo(broadcasterId, on("raid"));
-  listener.onChannelHypeTrainBeginV2(broadcasterId, on("hype_train"));
+  listener.onSubscriptionCreateSuccess((subscription) => {
+    const record = subscriptions.find((item) => item.handle === subscription);
+    if (record) { record.status = "active"; publishSubscriptions(); }
+  });
+  listener.onSubscriptionDeactivate((subscription) => {
+    const record = subscriptions.find((item) => item.handle === subscription);
+    if (record) { record.status = "pending"; publishSubscriptions(); }
+  });
+  listener.onSubscriptionCreateFailure((subscription) => {
+    const record = subscriptions.find((item) => item.handle === subscription);
+    if (record) { record.status = "failed"; publishSubscriptions(); }
+    options.onStatus?.(`EventSub subscription failed: ${record?.type ?? "unknown type"}. Check scopes and broadcaster access.`);
+  });
+  listener.onRevoke((subscription, status) => {
+    const record = subscriptions.find((item) => item.handle === subscription);
+    if (record) { record.status = `revoked:${status}`; publishSubscriptions(); }
+  });
+  listener.onUserSocketReady((userId) => {
+    connected = true;
+    options.onConnectionChange?.(true, broadcasterId);
+    options.onStatus?.(`EventSub WebSocket connected for broadcaster ${broadcasterId}.`);
+    void userId;
+  });
+  listener.onUserSocketDisconnect((_userId, error) => {
+    connected = false;
+    for (const item of subscriptions) if (item.status === "active") item.status = "reconnecting";
+    publishSubscriptions();
+    options.onConnectionChange?.(false, broadcasterId);
+    options.onStatus?.(error ? "EventSub WebSocket disconnected unexpectedly." : "EventSub WebSocket disconnected.");
+  });
+  const on = (name: TwitchEventName) => (event: unknown) => {
+    if (config.logEvents === "on") console.info(formatEventSubLogLine(name, event));
+    options.onEvent(name, event);
+  };
+  register("channel.chat.message", listener.onChannelChatMessage(broadcasterId, broadcasterId, on("chat")));
+  register("channel.follow", listener.onChannelFollow(broadcasterId, broadcasterId, on("follow")));
+  register("channel.subscribe", listener.onChannelSubscription(broadcasterId, on("subscribe")));
+  register("channel.subscription.gift", listener.onChannelSubscriptionGift(broadcasterId, on("gift")));
+  register("channel.cheer", listener.onChannelCheer(broadcasterId, on("cheer")));
+  register("channel.raid", listener.onChannelRaidTo(broadcasterId, on("raid")));
+  register("channel.hype_train.begin", listener.onChannelHypeTrainBeginV2(broadcasterId, on("hype_train")));
+  publishSubscriptions();
   listener.start();
+  options.onStatus?.("Subscribed to the broadcaster's own chat messages; broadcaster !law commands and votes are processed.");
 
   const sentAt: number[] = [];
   let lastSentAt = 0;
@@ -77,17 +126,20 @@ export async function startTwitchRuntime(options: TwitchRuntimeOptions): Promise
       await apiClient.chat.sendChatMessage(broadcasterId, message);
       lastSentAt = Date.now();
       sentAt.push(lastSentAt);
-    } catch (error) {
-      options.onStatus?.(`Twitch chat reply failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    } catch {
+      options.onStatus?.("Twitch chat reply failed. Check the chat scope and broadcaster permissions.");
     } finally {
       sending = false;
       void pump();
     }
   };
 
-  options.onStatus?.(`Twitch EventSub connected for broadcaster ${broadcasterId}.`);
+  options.onStatus?.(`Twitch EventSub starting for broadcaster ${broadcasterId}.`);
   return {
     stop: () => listener.stop(),
+    get broadcasterId() { return broadcasterId; },
+    get isConnected() { return connected; },
+    getSubscriptions,
     sendChatReply: (message) => {
       if (config.chatReplies !== "on") return;
       if (queue.length < 25) queue.push(message.slice(0, 500));

@@ -32,8 +32,8 @@ const unsupportedTriggerPatterns = [
 ];
 
 const unsupportedEffectPatterns = [
-  /\bdanc(?:e|es|ed|ing)\b/,
-  /\bscene\s*(?:#|number\s*)?([4-9]|[1-9]\d+)\b/
+  /\b(?:danc(?:e|es|ed|ing)|jump(?:s|ed|ing)?|explod(?:e|es|ed|ing)|sing(?:s|ed|ing|ang)?|fly|flies|flew|flying|spin(?:s|ning|ned|spun)?|leap(?:s|ed|ing)?|teleport(?:s|ed|ing)?|twirl(?:s|ed|ing)?|somersaults?|growl(?:s|ed|ing)?)\b/,
+  /\bscene\s*(?:#|number\s*)?(?:[4-9]|[1-9]\d+|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|hundred)\b/
 ];
 
 const unsupportedPartPatterns = [
@@ -45,23 +45,72 @@ function matchPart(text: string): PartId | undefined {
   return partPatterns.find(([, pattern]) => pattern.test(text))?.[0];
 }
 
+const colorWords: Array<[Color, string[]]> = [
+  ["red", ["red", "crimson", "scarlet"]], ["orange", ["orange"]],
+  ["yellow", ["yellow", "gold", "golden", "amber"]], ["green", ["green", "lime", "emerald"]],
+  ["cyan", ["cyan", "teal", "aqua"]], ["blue", ["blue", "azure", "navy", "sky"]],
+  ["purple", ["purple", "violet", "lilac"]], ["pink", ["pink", "magenta"]]
+];
+
+function editDistanceAtMostOne(left: string, right: string): boolean {
+  if (Math.abs(left.length - right.length) > 1) return false;
+  for (let k = 0; k < left.length - 1; k += 1) {
+    if (left[k] !== right[k] && left.slice(0, k) === right.slice(0, k) && left[k] === right[k + 1] && left[k + 1] === right[k]
+      && left.slice(k + 2) === right.slice(k + 2)) return true;
+  }
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < left.length && j < right.length) {
+    if (left[i] === right[j]) { i += 1; j += 1; continue; }
+    edits += 1;
+    if (edits > 1) return false;
+    if (left.length > right.length) i += 1;
+    else if (right.length > left.length) j += 1;
+    else { i += 1; j += 1; }
+  }
+  if (i < left.length || j < right.length) edits += 1;
+  return edits <= 1;
+}
+
 function matchColor(text: string): Color | undefined {
-  const colors: Array<[Color, RegExp]> = [
-    ["red", /\bred\b/], ["orange", /\borange\b/], ["yellow", /\byellow\b|\bgolden\b|\bgold\b/],
-    ["green", /\bgreen\b/], ["cyan", /\bcyan\b/], ["blue", /\bblue\b/],
-    ["purple", /\bpurple\b/], ["pink", /\bpink\b/]
-  ];
-  return colors.find(([, pattern]) => pattern.test(text))?.[0];
+  const words = text.match(/\b[a-z]+\b/g) ?? [];
+  const exact = colorWords.find(([, aliases]) => words.some((word) => aliases.includes(word)));
+  if (exact) return exact[0];
+  for (const [color, aliases] of colorWords) if (words.some((word) => word.length >= 5 && aliases.some((alias) => alias.length >= 5 && editDistanceAtMostOne(word, alias)))) return color;
+  return undefined;
+}
+
+const numberWords: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+  nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, dozen: 12, hundred: 100
+};
+
+function parseNumberToken(token: string): number | undefined {
+  if (/^\d+$/.test(token)) return boundedThreshold(token);
+  return numberWords[token];
+}
+
+function thresholdBefore(text: string): number {
+  const match = text.match(/(?:\ba\s+(?:dozen|hundred)|\b(?:dozen|hundred|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)|\b\d+)\s*$/);
+  if (!match) return 1;
+  const phrase = match[0].trim().toLowerCase();
+  if (phrase === "a dozen" || phrase === "dozen") return 12;
+  if (phrase === "a hundred" || phrase === "hundred") return 100;
+  return parseNumberToken(phrase) ?? 1;
 }
 
 function matchTrigger(text: string): { event_type: EventType; threshold: number } | undefined {
-  const chat = text.match(/\b(\d+)\s+messages?\s+(?:a|per)\s+minute\b/);
-  if (chat) return { event_type: "channel.chat.message", threshold: boundedThreshold(chat[1]) };
+  const numberPattern = "(?:\\d+|a\\s+(?:dozen|hundred)|dozen|hundred|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)";
+  const chat = text.match(new RegExp(`\\b(${numberPattern})\\s+(?:chat\\s+)?messages?\\s+(?:(?:a|per)\\s+minute|a\\s+minute)\\b`));
+  const contextualChat = text.match(new RegExp(`\\bchat\\s+\\w+\\s+(${numberPattern})\\s+messages?\\s+(?:a|per)\\s+minute\\b`));
+  if (chat || contextualChat) return { event_type: "channel.chat.message", threshold: thresholdBefore((chat ?? contextualChat)![1]!) };
   if (/\bchat\b/.test(text) && /\b(?:loud|busy|spamming|spam|messages?)\b/.test(text)) {
     return { event_type: "channel.chat.message", threshold: 1 };
   }
 
-  if (/\bhype\s+train\b/.test(text)) return { event_type: "channel.hype_train.begin", threshold: 1 };
+  if (/\bhype\s+train\b/.test(text)) return { event_type: "channel.hype_train.begin", threshold: precedingThreshold(text, /\bhype\s+train\b/) };
   if (/\bgift(?:ed)?\s+subs?\b|\bsubscription\s+gifts?\b|\bsubs?\s+gifts?\b/.test(text)) {
     return { event_type: "channel.subscription.gift", threshold: precedingThreshold(text, /\b(?:gift(?:ed)?\s+subs?|subscription\s+gifts?|subs?\s+gifts?)\b/) };
   }
@@ -84,8 +133,7 @@ function precedingThreshold(text: string, eventPattern: RegExp): number {
   const match = eventPattern.exec(text);
   if (!match) return 1;
   const before = text.slice(0, match.index);
-  const number = before.match(/\b(\d+)\s*$/);
-  return number ? boundedThreshold(number[1]) : 1;
+  return thresholdBefore(before);
 }
 
 function boundedThreshold(raw: string): number {
@@ -93,10 +141,12 @@ function boundedThreshold(raw: string): number {
 }
 
 function matchAction(text: string): ActionType | undefined {
-  if (/\bdare\s*([1-3])\b/.test(text)) return `dare_${text.match(/\bdare\s*([1-3])\b/)![1]}` as ActionType;
-  const scene = text.match(/\bscene\s*(?:#|number\s*)?([1-3])\b/);
-  if (scene) return `obs_scene_${scene[1]}` as ActionType;
-  if (/\b(?:shake|shakes|shaking)\b/.test(text)) return "screen_shake";
+  const actionNumber = "(?:[1-3]|one|two|three)";
+  const dare = text.match(new RegExp(`\\bdare\\s*(${actionNumber})\\b`));
+  if (dare) return `dare_${parseNumberToken(dare[1]!)}` as ActionType;
+  const scene = text.match(new RegExp(`\\bscene\\s*(?:#|number\\s*)?(${actionNumber})\\b`));
+  if (scene) return `obs_scene_${parseNumberToken(scene[1]!)}` as ActionType;
+  if (/\b(?:shake|shakes|shaking|wobble|wobbles|wobbled|wobbling|shudder|shudders|shuddered|shuddering)\b/.test(text)) return "screen_shake";
   if (/\b(?:flash|flashes|flashing)\b/.test(text)) return "screen_flash";
   if (/\b(?:roar|roars|roaring)\b/.test(text)) return "beast_roar";
   if (/\bconfetti\b/.test(text)) return "confetti";

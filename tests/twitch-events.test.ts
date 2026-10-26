@@ -10,6 +10,7 @@ describe("Twitch EventSub translation", () => {
   it("extracts chat commands from raw Twitch fixtures", () => {
     expect(chatMessageDetails(fixtures.chatCommand)).toEqual({
       userId: "viewer-7",
+      userName: "viewer-7",
       message: "!law when someone subs grow wings",
       messageId: "chat-message-123"
     });

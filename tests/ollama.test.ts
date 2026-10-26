@@ -172,6 +172,21 @@ describe("OllamaCompiler and AutoCompiler", () => {
     expect(result.rule.status).toBe("unsupported_trigger");
   });
 
+  it("rejects a dance-to-roar model result and returns parser unsupported_effect", async () => {
+    const modelMistake: Rule = {
+      ...testRule,
+      trigger: { event_type: "channel.follow", threshold: 1 },
+      action: { type: "beast_roar", intensity: "low" },
+      mutation: { part_id: "horns", color: "blue" }
+    };
+    const url = await serve((_body, response) => respond(response, modelMistake));
+    const compiler = new AutoCompiler({ ollama: new OllamaCompiler({ url }) });
+
+    const result = await compiler.compileWithPath("follow, make the beast dance and grow blue horns");
+    expect(result.path).toBe("parser (model rejected)");
+    expect(result.rule.status).toBe("unsupported_effect");
+  });
+
   it("never asks Ollama to override an unsafe parser result", async () => {
     let calls = 0;
     const url = await serve((_body, response) => {

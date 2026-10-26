@@ -61,7 +61,7 @@
       <div id="message" role="status" aria-live="polite">Select a viewer to begin.</div>
     </section>
     <section class="card stage">
-      <div class="stage-head"><h2>Overlay preview</h2><span id="connection">Connecting…</span></div>
+      <div class="stage-head"><h2>Overlay preview</h2><span id="connection">Overlay connecting…</span><span id="twitch-connection">Twitch: not connected</span></div>
       <iframe title="Transparent stream overlay preview" src="/overlay.html"></iframe>
     </section>
   </main>
@@ -116,6 +116,21 @@
       }
     });
     socket.addEventListener("close", () => { document.getElementById("connection").textContent = "Overlay reconnecting…"; });
+
+    async function refreshTwitchHealth() {
+      const label = document.getElementById("twitch-connection");
+      try {
+        const response = await fetch("/health");
+        const health = await response.json();
+        label.textContent = health.twitchConnected && health.broadcasterId
+          ? `Twitch: connected as ${health.broadcasterId}`
+          : "Twitch: not connected";
+      } catch {
+        label.textContent = "Twitch: not connected";
+      }
+    }
+    void refreshTwitchHealth();
+    setInterval(() => void refreshTwitchHealth(), 5000);
   </script>
 </body>
 </html>

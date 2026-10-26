@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import { config } from "./config.js";
+import { createHealthHandler, type HealthSubscription } from "./health.js";
 import { RuleEngine, type EngineEvent } from "./engine.js";
 import { AutoCompiler, type CompilerPath } from "./compiler/auto.js";
 import { OllamaCompiler } from "./compiler/ollama.js";
@@ -11,6 +12,8 @@ import type { Rule } from "./compiler/types.js";
 import { VotingManager, type VoteChoice } from "./voting.js";
 import { chatMessageDetails, translateTwitchEvent } from "./twitch/events.js";
 import { startTwitchRuntime, type TwitchRuntime } from "./twitch/runtime.js";
+import { formatDecisionLogLine } from "./twitch/logging.js";
+import { createLawBannerPayload, lawBannerForSnapshot, type LawBannerPayload } from "./law-banner.js";
 
 const app = express();
 const server = createServer(app);
@@ -24,8 +27,15 @@ const clients = new Set<WebSocket>();
 let pendingLaw: { id: string; text: string; proposerId: string; rule: Rule; compilerPath: CompilerPath } | undefined;
 let lastConflict: ReturnType<RuleEngine["add"]>["conflict"];
 let twitchRuntime: TwitchRuntime | undefined;
+let twitchConnected = false;
+let twitchBroadcasterId: string | null = config.twitchBroadcasterId || null;
+let eventSubSubscriptions: HealthSubscription[] = [];
+let lawBanner: LawBannerPayload | undefined;
 let proposalSequence = 0;
 const crisisProposalMessage = "A constitutional crisis is underway. Wait for it to resolve before proposing another law.";
+const logDecision = (decision: string, fields: Record<string, string | number | boolean | undefined> = {}) => {
+  console.info(formatDecisionLogLine(decision, fields));
+};
 
 app.use(express.json({ limit: "8kb" }));
 app.use(express.static(resolve("public")));
@@ -51,7 +61,8 @@ function makeSnapshot() {
       total: current.voters
     } : null,
     crisis: engine.currentCrisis ?? null,
-    conflict: lastConflict ?? null
+    conflict: lastConflict ?? null,
+    law_banner: lawBannerForSnapshot(lawBanner)
   };
 }
 
@@ -99,11 +110,17 @@ function showNotice(message: string): void {
   broadcastMessage({ type: "notice", message, kind: "info" });
 }
 
-async function handleTwitchChat(userId: string, text: string, messageId: string): Promise<void> {
+async function handleTwitchChat(userId: string, userName: string, text: string, messageId: string): Promise<void> {
   const command = text.trim();
+  if (/^!law$/i.test(command)) {
+    logDecision("law_proposal", { user: userName, user_id: userId, status: "missing_law_text", message_id: messageId });
+    showRefusal("too_vague");
+    return;
+  }
   const highlight = command.match(/^!law\s+(\d+)\s*$/i);
   if (highlight) {
     const law = engine.activeLaws.find((item) => item.id === `law-${Number(highlight[1])}`);
+    logDecision("law_highlight", { user: userName, user_id: userId, law_number: Number(highlight[1]), found: Boolean(law), message_id: messageId });
     if (law) broadcastMessage({ type: "highlight", lawId: law.id });
     return;
   }
@@ -112,6 +129,7 @@ async function handleTwitchChat(userId: string, text: string, messageId: string)
     const lawText = proposal[1]!.trim();
     if (!lawText) return;
     if (engine.currentCrisis) {
+      logDecision("law_proposal", { user: userName, user_id: userId, status: "rejected_crisis_active", compiler_path: "not_run", text: lawText, message_id: messageId });
       showNotice(crisisProposalMessage);
       twitchRuntime?.sendChatReply(crisisProposalMessage);
       return;
@@ -121,9 +139,11 @@ async function handleTwitchChat(userId: string, text: string, messageId: string)
     try {
       ({ rule, path: compilerPath } = await compileLaw(lawText));
     } catch {
+      logDecision("law_proposal", { user: userName, user_id: userId, status: "compile_error", compiler_path: "unknown", text: lawText, message_id: messageId });
       showRefusal("too_vague");
       return;
     }
+    logDecision("law_proposal", { user: userName, user_id: userId, status: rule.status, compiler_path: compilerPath, text: lawText, message_id: messageId });
     if (rule.status !== "ok") {
       showRefusal(rule.status);
       twitchRuntime?.sendChatReply(refusalText[rule.status]);
@@ -131,17 +151,20 @@ async function handleTwitchChat(userId: string, text: string, messageId: string)
     }
     const proposalId = `twitch-proposal-${Date.now()}-${++proposalSequence}`;
     if (engine.currentCrisis) {
+      logDecision("law_proposal", { user: userName, user_id: userId, status: "rejected_crisis_started_during_compile", compiler_path: compilerPath, text: lawText, message_id: messageId });
       showNotice(crisisProposalMessage);
       twitchRuntime?.sendChatReply(crisisProposalMessage);
       return;
     }
     if (!voting.startProposal(proposalId, userId)) {
+      logDecision("law_proposal", { user: userName, user_id: userId, status: "vote_already_active_or_cooldown", compiler_path: compilerPath, text: lawText, message_id: messageId });
       const message = "A vote is active or this viewer is on proposal cooldown.";
       showNotice(message);
       twitchRuntime?.sendChatReply(message);
       return;
     }
     pendingLaw = { id: proposalId, text: lawText, proposerId: userId, rule, compilerPath };
+    logDecision("law_proposed", { user: userName, user_id: userId, proposal_id: proposalId, compiler_path: compilerPath, status: rule.status, text: lawText });
     lastConflict = undefined;
     broadcastSnapshot();
     twitchRuntime?.sendChatReply("Law proposed. Vote yes or no in chat.");
@@ -149,17 +172,19 @@ async function handleTwitchChat(userId: string, text: string, messageId: string)
   }
   if (engine.currentCrisis && /^(1|2)$/.test(command)) {
     const counted = engine.castCrisisVote(userId, command === "1" ? "existing" : "proposed");
+    logDecision("vote_cast", { kind: "crisis", user: userName, user_id: userId, choice: command, counted, message_id: messageId });
     if (counted) broadcastSnapshot();
     return;
   }
   const choice: VoteChoice | undefined = /^(1|yes)$/i.test(command) ? "yes" : /^(2|no)$/i.test(command) ? "no" : undefined;
-  if (choice && voting.current) {
-    if (voting.castVote(userId, choice)) {
+  if (choice) {
+    const counted = voting.current ? voting.castVote(userId, choice) : false;
+    logDecision("vote_cast", { kind: "proposal", user: userName, user_id: userId, choice, counted, message_id: messageId });
+    if (counted) {
       broadcastSnapshot();
       twitchRuntime?.sendChatReply("Vote counted.");
     }
   }
-  void messageId;
 }
 
 function handleTwitchEvent(name: Parameters<typeof translateTwitchEvent>[0], payload: unknown): void {
@@ -168,8 +193,11 @@ function handleTwitchEvent(name: Parameters<typeof translateTwitchEvent>[0], pay
   if (result.ignored) return;
   for (const law of result.fired) broadcastEffect(law.action.type);
   if (name === "chat") {
-    const { userId, message, messageId } = chatMessageDetails(payload);
-    void handleTwitchChat(userId, message, messageId);
+    const { userId, userName, message, messageId } = chatMessageDetails(payload);
+    if (/^!law\b|^(?:1|2|yes|no)$/i.test(message.trim())) {
+      logDecision("chat_command_received", { user: userName, user_id: userId, message });
+    }
+    void handleTwitchChat(userId, userName, message, messageId);
   }
   broadcastSnapshot();
 }
@@ -182,6 +210,13 @@ sockets.on("connection", (socket) => {
 
 app.get("/", (_request, response) => response.sendFile(resolve("public/sandbox.html")));
 app.get("/api/state", (_request, response) => response.json(makeSnapshot()));
+app.get("/health", createHealthHandler(() => ({
+  twitchConnected,
+  broadcasterId: twitchBroadcasterId,
+  subscriptions: eventSubSubscriptions,
+  compilerMode: config.compiler,
+  activeLaws: engine.activeLaws.length
+}), config.ollamaUrl));
 
 app.post("/api/sandbox/propose", async (request, response) => {
   const text = typeof request.body?.text === "string" ? request.body.text.trim() : "";
@@ -287,6 +322,20 @@ setInterval(() => {
   const crisisOutcome = engine.resolveCrisisIfExpired();
   if (crisisOutcome) {
     const newLawWon = crisisOutcome.winner_choice === "proposed";
+    lawBanner = createLawBannerPayload("crisis_resolved", crisisOutcome.winner, {
+      headline: newLawWon ? "NEW LAW SURVIVES" : "EXISTING LAW SURVIVES",
+      relatedLawText: crisisOutcome.loser.raw_text,
+      relatedLawRelation: "overruled"
+    });
+    logDecision("crisis_ended", {
+      zone: crisisOutcome.winner.zone,
+      winner_id: crisisOutcome.winner.id,
+      loser_id: crisisOutcome.loser.id,
+      winner_choice: crisisOutcome.winner_choice,
+      existing_votes: crisisOutcome.existing_votes,
+      proposed_votes: crisisOutcome.proposed_votes
+    });
+    if (newLawWon) logDecision("law_enacted", { id: crisisOutcome.winner.id, zone: crisisOutcome.winner.zone, part: crisisOutcome.winner.mutation.part_id });
     if (newLawWon) broadcastEffect(crisisOutcome.winner.action.type, true);
     showNotice(newLawWon ? "The new law survives the constitutional crisis." : "The existing law survives the constitutional crisis.");
     broadcastSnapshot();
@@ -295,13 +344,28 @@ setInterval(() => {
 
   const outcome = voting.closeIfExpired();
   if (!outcome) return;
+  logDecision("vote_result", { proposal_id: outcome.proposalId, status: outcome.status, yes: outcome.yes, no: outcome.no, total: outcome.total });
   if (outcome.status === "passed" && pendingLaw) {
     const result = engine.beginCrisis(pendingLaw.rule, pendingLaw.text, config.crisisSeconds, pendingLaw.compilerPath);
     if (result.status === "added") {
+      lawBanner = createLawBannerPayload("passed", result.law);
       console.info(`Compiler ${compilerLabel(pendingLaw.compilerPath)} handled ${result.law.id}`);
+      logDecision("law_enacted", { id: result.law.id, zone: result.law.zone, part: result.law.mutation.part_id });
       broadcastEffect(result.law.action.type, true);
     } else if (result.status === "started") {
+      lawBanner = createLawBannerPayload("passed", result.crisis.proposed, {
+        headline: "LAW PASSED · CRISIS VOTE",
+        relatedLawText: result.crisis.existing.raw_text,
+        relatedLawRelation: "challenged"
+      });
       console.info(`Compiler ${compilerLabel(pendingLaw.compilerPath)} handled ${result.crisis.proposed.id}`);
+      logDecision("crisis_started", {
+        zone: result.crisis.zone,
+        existing_id: result.crisis.existing.id,
+        proposed_id: result.crisis.proposed.id,
+        existing_text: result.crisis.existing.raw_text,
+        proposed_text: result.crisis.proposed.raw_text
+      });
     }
   }
   pendingLaw = undefined;
@@ -312,7 +376,19 @@ setInterval(() => {
 server.listen(config.port, "127.0.0.1", () => {
   console.log(`Constitution Beast sandbox is ready: http://localhost:${config.port}/sandbox.html`);
   console.log(`Overlay browser source: http://localhost:${config.port}/overlay.html`);
-  void startTwitchRuntime({ onEvent: handleTwitchEvent, onStatus: (message) => console.log(message) })
-    .then((runtime) => { twitchRuntime = runtime; })
-    .catch((error: unknown) => console.error("Could not start Twitch EventSub:", error));
+  void startTwitchRuntime({
+    onEvent: handleTwitchEvent,
+    onStatus: (message) => console.log(message),
+    onConnectionChange: (connected, id) => { twitchConnected = connected; twitchBroadcasterId = id; },
+    onSubscriptionsChange: (subscriptions) => { eventSubSubscriptions = subscriptions; }
+  })
+    .then((runtime) => {
+      twitchRuntime = runtime;
+      if (runtime) {
+        twitchBroadcasterId = runtime.broadcasterId;
+        twitchConnected = runtime.isConnected;
+        eventSubSubscriptions = runtime.getSubscriptions();
+      }
+    })
+    .catch(() => console.error("Could not start Twitch EventSub. Check credentials, token scopes, and broadcaster configuration."));
 });

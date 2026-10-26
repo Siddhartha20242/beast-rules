@@ -22,6 +22,7 @@
     .part { opacity: 0; transition: opacity .45s ease; }
     .part.active { opacity: 1; }
     .part-fill { fill: var(--part-color, #c7d2fe); stroke: #202943; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+    .part.pulse .part-fill { stroke: #fff; stroke-width: 12; filter: drop-shadow(0 0 7px var(--pulse-color, #ffd166)); animation: part-pulse .68s ease-in-out 6; }
     .part-detail { fill: #fff; stroke: #202943; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
     .part-detail[fill="none"] { fill: none; }
     .eye-white { fill: #fff7d6; stroke: #202943; stroke-width: 5; }
@@ -43,7 +44,17 @@
     .compiler-label { display:inline-block; margin-left:5px; padding:2px 5px; border-radius:5px; background:#343c5c; color:#b7c1e1; font-size:9px; font-weight:800; vertical-align:1px; }
     #proposal-compiler { margin:-3px 0 7px; color:#aeb8da; font-size:10px; font-weight:800; }
     #laws .law.highlighted { color: #ffe17a; text-shadow: 0 0 12px #ffc400; }
-    #notice { display:none; position:absolute; z-index:5; left:50%; top:18px; transform:translateX(-50%); padding:12px 18px; border:1px solid #ffcc66; border-radius:10px; background:#24190de8; color:#ffe5b4; font-weight:700; }
+    #law-banner { display:none; position:absolute; z-index:6; top:12px; left:50%; transform:translateX(-50%); width:min(1040px,calc(100vw - 24px)); padding:8px 14px; border:1px solid #ffd166; border-radius:12px; background:#151a2bee; box-shadow:0 6px 24px #05071399; pointer-events:none; }
+    #law-banner.show { display:block; }
+    #law-banner-headline { margin-bottom:3px; color:#ffd166; font-size:10px; font-weight:950; letter-spacing:.09em; text-transform:uppercase; }
+    #law-banner-line { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:10px; min-width:0; }
+    #law-banner-text { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:clamp(12px,1.3vw,17px); font-weight:800; }
+    #law-banner-arrow { color:#ffd166; font-size:19px; font-weight:900; }
+    #law-banner-part { white-space:nowrap; color:#fff; font-size:clamp(11px,1.2vw,15px); font-weight:950; }
+    #law-banner-related { display:none; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; margin-top:3px; color:#d5d9e8; font-size:10px; }
+    #law-banner-related.show { display:block; }
+    .law-banner-active #crisis-banner.show { top:76px; }
+    #notice { display:none; position:absolute; z-index:7; left:50%; top:18px; transform:translateX(-50%); padding:12px 18px; border:1px solid #ffcc66; border-radius:10px; background:#24190de8; color:#ffe5b4; font-weight:700; }
     #crisis-banner { display:none; position:absolute; z-index:4; top:18px; left:50%; transform:translateX(-50%); width:min(920px,calc(100vw - 24px)); padding:14px; border:2px solid #ff6969; border-radius:16px; background:#341d28f2; box-shadow:0 0 32px #ff3d4b55; }
     #crisis-banner.show { display:block; }
     #crisis-title { color:#ffe37b; text-align:center; font-size:clamp(16px,2.3vw,24px); font-weight:950; letter-spacing:.1em; }
@@ -67,10 +78,17 @@
     @keyframes blink { 0%,43%,47%,100% { transform: scaleY(1); } 45% { transform: scaleY(.08); } }
     @keyframes shake { 0%,100% { transform: translateX(0) rotate(0); } 20% { transform: translateX(-12px) rotate(-2deg); } 45% { transform: translateX(10px) rotate(2deg); } 70% { transform: translateX(-7px) rotate(-1deg); } }
     @keyframes fall { to { transform: translateY(110vh) rotate(620deg); opacity: .2; } }
+    @keyframes part-pulse { 0%,100% { stroke-width:8; opacity:.9; } 50% { stroke-width:15; opacity:1; } }
+    @media (max-width: 560px) { #law-banner { padding:7px 9px; } #law-banner-line { gap:5px; } #law-banner-arrow { font-size:15px; } #law-banner-related { font-size:9px; } }
   </style>
 </head>
 <body>
   <div id="notice"></div>
+  <section id="law-banner" aria-live="polite">
+    <div id="law-banner-headline"></div>
+    <div id="law-banner-line"><div id="law-banner-text"></div><div id="law-banner-arrow">→</div><div id="law-banner-part"></div></div>
+    <div id="law-banner-related"></div>
+  </section>
   <section id="crisis-banner" aria-live="polite">
     <div id="crisis-title">⚠ CONSTITUTIONAL CRISIS ⚠</div>
     <div id="crisis-countdown"></div>
@@ -156,6 +174,8 @@
     let countdownTimer;
     let crisisCountdownTimer;
     let noticeTimer;
+    let lawBannerTimer;
+    let currentLawBannerId = "";
     let highlightedLawId = "";
 
     function showSim() {
@@ -165,14 +185,64 @@
       simTimer = setTimeout(() => tag.classList.remove("visible"), 3000);
     }
 
+    function hideLawBanner() {
+      clearTimeout(lawBannerTimer);
+      currentLawBannerId = "";
+      document.body.classList.remove("law-banner-active");
+      document.getElementById("law-banner").classList.remove("show");
+      document.getElementById("law-banner-related").classList.remove("show");
+      for (const group of document.querySelectorAll(".part.pulse")) {
+        group.classList.remove("pulse");
+        if (group.classList.contains("banner-only")) group.classList.remove("active", "banner-only");
+      }
+    }
+
+    function showLawBanner(banner, partMap) {
+      if (!banner || banner.ends_at <= Date.now()) { hideLawBanner(); return; }
+      if (banner.banner_id === currentLawBannerId) {
+        const samePart = [...document.querySelectorAll(".part[data-part]")].find((group) => group.dataset.part === banner.part_id);
+        const hasActiveLaw = Object.values(partMap).some((active) => active.part_id === banner.part_id);
+        if (samePart) {
+          samePart.classList.add("pulse");
+          if (!hasActiveLaw) samePart.classList.add("active", "banner-only");
+        }
+        return;
+      }
+      hideLawBanner();
+      currentLawBannerId = banner.banner_id;
+      document.getElementById("law-banner-headline").textContent = banner.headline;
+      document.getElementById("law-banner-text").textContent = banner.law_text;
+      document.getElementById("law-banner-part").textContent = `${banner.part_id.replaceAll("_", " ").toUpperCase()} (${banner.color}, ${banner.zone})`;
+      const related = document.getElementById("law-banner-related");
+      if (banner.related_law_text) {
+        related.textContent = `${banner.related_law_relation === "overruled" ? "OVERRULED" : "CHALLENGES"}: ${banner.related_law_text}`;
+        related.classList.add("show");
+      }
+      document.getElementById("law-banner").classList.add("show");
+      document.body.classList.add("law-banner-active");
+      const part = [...document.querySelectorAll(".part[data-part]")].find((group) => group.dataset.part === banner.part_id);
+      if (part) {
+        part.style.setProperty("--pulse-color", overlayColors[banner.color] || "#ffd166");
+        const alreadyActive = Object.values(partMap).some((active) => active.part_id === banner.part_id);
+        if (!alreadyActive) {
+          part.style.setProperty("--part-color", overlayColors[banner.color] || "#c7d2fe");
+          part.classList.add("active", "banner-only");
+        }
+        part.classList.add("pulse");
+      }
+      lawBannerTimer = setTimeout(hideLawBanner, Math.max(0, banner.ends_at - Date.now()));
+    }
+
     function render(state) {
       const partMap = state.beast_parts || {};
       for (const group of document.querySelectorAll(".part[data-part]")) {
         const partId = group.dataset.part;
         const active = Object.values(partMap).find((part) => part.part_id === partId);
+        group.classList.remove("banner-only");
         group.classList.toggle("active", Boolean(active));
         if (active) group.style.setProperty("--part-color", overlayColors[active.color] || "#c7d2fe");
       }
+      showLawBanner(state.law_banner, partMap);
 
       const laws = document.getElementById("laws");
       laws.replaceChildren();
