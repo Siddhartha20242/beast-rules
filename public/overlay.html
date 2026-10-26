@@ -39,6 +39,19 @@
     #howto strong { color: #ffd166; }
     #vote { display: none; }
     #vote.show { display: block; }
+    #ballot { display: none; border-color: #ffd16677; }
+    #ballot.show { display: block; }
+    #ballot-title { color: #ffe37b; font-size: 12px; font-weight: 900; letter-spacing: .1em; margin-bottom: 7px; display: flex; justify-content: space-between; }
+    .ballot-option { position: relative; display: flex; align-items: center; gap: 9px; margin-top: 5px; padding: 6px 9px; border-radius: 10px; background: #262d4a; overflow: hidden; font-size: 13px; font-weight: 700; color: #eef0ff; }
+    .ballot-fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: linear-gradient(90deg, #ffd16655, #ffd16622); transition: width .25s ease; }
+    .ballot-num { position: relative; flex: 0 0 22px; height: 22px; border-radius: 50%; background: #ffd166; color: #29233a; display: grid; place-items: center; font-weight: 950; }
+    .ballot-text { position: relative; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ballot-count { position: relative; color: #c4c9dc; font-size: 12px; }
+    #laws-panel { display: none; position: absolute; z-index: 6; left: 50%; bottom: 190px; transform: translateX(-50%); width: min(620px, calc(100vw - 24px)); max-height: 38vh; overflow: hidden; }
+    #laws-panel.show { display: block; }
+    #laws-panel-title { color: #ffe37b; font-size: 13px; font-weight: 900; letter-spacing: .1em; margin-bottom: 6px; }
+    .laws-panel-row { margin-top: 4px; padding: 5px 9px; border-radius: 9px; background: #262d4a; font-size: 13px; font-weight: 700; color: #eef0ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .laws-panel-row b { color: #ffd166; margin-right: 6px; }
     #proposal-text { width: 100%; min-width: 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 7px; }
     #vote-track { height: 12px; background: #353d59; border-radius: 99px; overflow: hidden; display: flex; }
     #yes-bar { background: #73e0a9; width: 0%; transition: width .25s ease; }
@@ -225,7 +238,15 @@
   <div id="part-preview-label" aria-live="polite"></div>
   <button id="sound-hint" type="button">Click to enable sound</button>
   <div id="flash"></div>
+  <section id="laws-panel" class="panel" aria-live="polite">
+    <div id="laws-panel-title">ACTIVE LAWS · !repeal &lt;number&gt; to propose removing one</div>
+    <div id="laws-panel-list"></div>
+  </section>
   <section id="hud">
+    <div id="ballot" class="panel" aria-live="polite">
+      <div id="ballot-title"><span>BALLOT · type 1, 2 or 3</span><span id="ballot-time"></span></div>
+      <div id="ballot-options"></div>
+    </div>
     <div id="vote" class="panel">
       <div id="proposal-text"></div>
       <div id="proposal-compiler"></div>
@@ -651,6 +672,9 @@
         clearInterval(crisisCountdownTimer);
       }
 
+      renderBallot(state.ballot);
+      renderLawsPanel(state);
+
       const proposal = state.proposal;
       const vote = document.getElementById("vote");
       vote.classList.toggle("show", Boolean(proposal));
@@ -673,6 +697,66 @@
         clearInterval(countdownTimer);
         document.getElementById("proposal-compiler").textContent = "";
       }
+    }
+
+    let ballotTimer;
+    function renderBallot(ballot) {
+      const card = document.getElementById("ballot");
+      card.classList.toggle("show", Boolean(ballot));
+      if (!ballot) { clearInterval(ballotTimer); return; }
+      const list = document.getElementById("ballot-options");
+      list.replaceChildren();
+      const total = Math.max(1, ballot.total);
+      for (const option of ballot.options) {
+        const row = document.createElement("div");
+        row.className = "ballot-option";
+        const fill = document.createElement("span");
+        fill.className = "ballot-fill";
+        fill.style.width = `${option.votes / total * 100}%`;
+        const number = document.createElement("span");
+        number.className = "ballot-num";
+        number.textContent = String(option.number);
+        const text = document.createElement("span");
+        text.className = "ballot-text";
+        text.textContent = option.description;
+        const count = document.createElement("span");
+        count.className = "ballot-count";
+        count.textContent = String(option.votes);
+        row.append(fill, number, text, count);
+        list.append(row);
+      }
+      const tick = () => { document.getElementById("ballot-time").textContent = `${Math.max(0, Math.ceil((ballot.ends_at - Date.now()) / 1000))}s left`; };
+      tick();
+      clearInterval(ballotTimer);
+      ballotTimer = setInterval(tick, 500);
+    }
+
+    let lawsPanelTimer;
+    function renderLawsPanel(state) {
+      const panel = document.getElementById("laws-panel");
+      const until = Number(state.laws_panel_until) || 0;
+      const visible = until > Date.now();
+      panel.classList.toggle("show", visible);
+      clearTimeout(lawsPanelTimer);
+      if (!visible) return;
+      const list = document.getElementById("laws-panel-list");
+      list.replaceChildren();
+      const laws = state.active_laws || [];
+      if (!laws.length) {
+        const empty = document.createElement("div");
+        empty.className = "laws-panel-row";
+        empty.textContent = "No active laws yet.";
+        list.append(empty);
+      }
+      for (const law of laws) {
+        const row = document.createElement("div");
+        row.className = "laws-panel-row";
+        const id = document.createElement("b");
+        id.textContent = law.id;
+        row.append(id, document.createTextNode(law.description));
+        list.append(row);
+      }
+      lawsPanelTimer = setTimeout(() => panel.classList.remove("show"), Math.max(0, until - Date.now()));
     }
 
     function renderLawToasts(toasts) {

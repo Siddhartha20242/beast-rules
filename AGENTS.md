@@ -1,13 +1,13 @@
 # AGENTS.md — Beast Rules
 
 ## Mission
-Beast Rules is a Twitch overlay where chat writes the laws of the stream and the laws are the creature. Viewers propose a law in plain English; a Codex-class model compiles it to a schema-validated rule; chat votes; a passed law fires on Twitch events AND grows one visible part on an SVG beast. Persistent across streams.
+Beast Rules is a Twitch overlay where chat writes the laws of the stream and the laws are the creature. Viewers propose a law in plain English; a small model compiles it to a schema-validated rule; chat votes; a passed law fires on Twitch events AND grows one visible part on an SVG beast. Persistent across streams.
 
 ## Judging rules this project is built against (official)
-Stage One is pass/fail: fits the theme and reasonably applies Codex. Stage Two has four equally weighted criteria: Innovation/Idea, Potential Impact (useful or entertaining for streamers and communities), Technological implementation (how well built, how well Codex is used), Design (easy to use, fun to watch). Ties break on Innovation first, then Impact. Judging may include automated AI analysis, so the README and Devpost text must be complete, plain and self-explanatory. Max score is 40.
+Stage One is pass/fail: fits the theme and reasonably applies the required coding agent. Stage Two has four equally weighted criteria: Innovation/Idea, Potential Impact (useful or entertaining for streamers and communities), Technological implementation (how well built, how well the coding agent is used), Design (easy to use, fun to watch). Ties break on Innovation first, then Impact. Judging may include automated AI analysis, so the README and Devpost text must be complete, plain and self-explanatory. Max score is 40.
 - Innovation: lead with "the rule system is the visual system" everywhere.
 - Impact: show it works for small streams (chat-activity triggers need no subs or raids) and for large ones.
-- Technology: tests, safety gate, and a visible Codex workflow: use Codex to write code, then to review it (its own review pass) and to harden tests; log each step in `docs/CODEX_LOG.md`.
+- Technology: tests, safety gate, and a visible build workflow: use the coding agent to write code, then to review it (its own review pass) and to harden tests; log each step in `docs/CODEX_LOG.md`.
 - Design: an always-visible "how to play" strip on the overlay (`!law <idea>`) so a new viewer knows what to type with no explanation.
 
 ## Scope tiers (read first)
@@ -73,15 +73,15 @@ Describe in the README and video only what is running. Do not mention anything f
 
 ## Demo mode and polish (required, not optional)
 - [ ] D1. Sandbox mode (`npm run sandbox`): a local control page with buttons that act as several fake viewers (names like viewer_1..5) to propose laws, vote, and fire follow/sub/raid/cheer/chat-spike events. No Twitch credentials needed. Every simulated event shows a small "SIM" tag in the overlay. A judge must be able to clone the repo, run one command, and see the beast change within 60 seconds.
-- [ ] D2. `npm run demo`: a scripted replay following DEMO.md, deterministic, with `VOTE_SECONDS` configurable.
+- [ ] D2. `npm run demo`: a scripted replay of the sandbox flow, deterministic, with `VOTE_SECONDS` configurable (not implemented).
 - [ ] D3. Polish: beast idle animation (breathing), a distinct mutation flash, a gavel animation on pass, a crisis effect, and short synthesized audio cues using Web Audio (no audio files, no copyright). Mutation transition about 1s.
-- [ ] D4. `docs/CODEX_LOG.md`: after each roadmap step, append the prompt used, what Codex produced, and what you changed by hand. Keep it honest. The README links to it in a "How Codex built this" section.
+- [ ] D4. `docs/CODEX_LOG.md`: after each roadmap step, append the prompt used, what the coding agent produced, and what you changed by hand. Keep it honest. The README links to it in a "How it was built" section.
 - [ ] D5. Test contract: `tests/laws.json` must pass for every compiler (compile cases and conflict cases). Run it in CI-style `npm test`.
 
 ## README and submission docs (required)
 - [ ] R1. README opens with sandbox: `npm install && npm run sandbox`, no credentials, beast visible in 60 seconds. Twitch setup comes after.
 - [ ] R2. Safety gate diagram in the README (Mermaid or ASCII): `chat input -> Ollama (enum-only schema) -> schema validation -> [fail] -> template parser -> deterministic rule engine -> overlay`. One sentence under it: the model cannot output anything the schema does not list.
-- [ ] R3. "How Codex built this" section: link `docs/CODEX_LOG.md`, show the test set going red to green, and include at least one REAL failure Codex produced and how the spec or prompt was changed. Do not invent examples. State plainly that no model call runs through Codex at runtime.
+- [ ] R3. "How it was built" section: link `docs/CODEX_LOG.md`, show the test set going red to green, and include at least one REAL failure the coding agent produced and how the spec or prompt was changed. Do not invent examples. State plainly that no model call runs through the coding agent at runtime.
 - [ ] R4. Text-only comparison with node-based automation tools (no screenshots or logos of third-party products). Use laws the engine really supports as examples.
 
 ## Upgrades (after step 8 works end to end)

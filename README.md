@@ -2,10 +2,7 @@
 
 Chat writes the laws of the stream, and the laws are the creature. Viewers propose rules, vote on them, and watch the beast evolve.
 
-**Screenshot placeholder:** `docs/images/banner.png`<br>
-**Law-pass GIF placeholder:** `docs/images/law-pass.gif`<br>
-Demo video: [link coming]<br>
-Devpost: [link coming]
+![How a law travels from Twitch chat to the beast](docs/images/architecture.png)
 
 ## Try it in 60 seconds
 
@@ -70,6 +67,9 @@ When the vote passes, the overlay shows the law-passed banner and pulses the win
 - Synthesized Web Audio cues (no audio files), plus sandbox crowd simulation with adjustable yes bias and direct buttons for the four overlay effects.
 - Twitch EventSub WebSocket integration for chat, follow, subscription, gift, cheer, raid, and hype-train events; chat command translation and fixtures are tested. `/health` reports service state.
 - OBS scene actions mapped to server-configured scene names; the adapter is tested with mocks only. Live OBS switching has not been verified.
+- **Numbered ballot.** Every `BALLOT_MINUTES` (default 5, `0` turns it off) the overlay offers three suggested laws for `BALLOT_SECONDS` (default 20). Chat types `1`, `2` or `3`; the winner is enacted with no second vote (a tie goes to the lower number, and no votes means no winner). Suggestions are built deterministically from templates, run through the real parser (anything that does not compile is discarded), favour empty body zones and recent event types, and never repeat a part already on the beast. Only canonical descriptions are shown.
+- **`!laws` and `!repeal`.** `!laws` shows a six-second panel of the active laws; `!repeal 3` opens a yes/no vote to remove `law-3` (same rules as a proposal: one vote at a time, per-viewer cooldown, blocked while paused, during a crisis or during a ballot). A repealed law moves to history as "repealed" and its zone is free again.
+- Malformed requests to the sandbox API get a short JSON error, never a stack trace.
 
 ## Measured compile accuracy
 
@@ -84,7 +84,7 @@ These small, fixed sets are not a measure of general language understanding, and
 
 ## How Codex built this
 
-This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **210 tests across 16 files** (the last stability fix was written by Claude, not Codex; see the log). The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
+This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **224 tests across 17 files**. Codex ran out of free credits near the end, so two late changes were written with a different AI assistant instead and are labelled that way in the log: the network-resilience fix, and the ballot plus repeal features. The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
 
 Three examples of problems found and resolved: [the parser initially emitted `eventType` instead of schema-required `event_type`](docs/CODEX_LOG.md#roadmap-step-2--templatecompiler-only); [npm's shared cache rejected writes, so installation was retried with a temporary cache](docs/CODEX_LOG.md#streamer-controls-and-obs-scene-switching); and [the preview initially missed its first frame, so it was rerun from the start and all 15 parts were verified](docs/CODEX_LOG.md#sandbox-crowd-bias-reliable-part-preview-and-legacy-proposer-labels). **No runtime model call goes through Codex:** law compilation uses the local parser and, when configured, a local Ollama server.
 

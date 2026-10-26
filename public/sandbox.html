@@ -69,6 +69,8 @@
       <div class="section events"><h2>Effects</h2><div class="actions">
         <button data-effect="screen_shake">Screen shake</button><button data-effect="screen_flash">Screen flash</button><button data-effect="confetti">Confetti</button><button data-effect="beast_roar">Beast roar</button>
       </div><div class="hint">Play an overlay effect directly; each test shows the SIM tag and needs no law.</div></div>
+      <div class="section"><h2>Ballot</h2><div class="row"><button class="primary" id="ballot-open">Open ballot now</button></div><div class="row" style="margin-top:8px"><button data-ballot="1">Vote 1</button><button data-ballot="2">Vote 2</button><button data-ballot="3">Vote 3</button></div><div class="hint">Three suggested laws appear on the overlay. The acting viewer votes 1, 2 or 3; the winner is enacted with no second vote. "Simulate crowd" also votes on a ballot.</div></div>
+      <div class="section"><h2>Laws and repeal</h2><div class="row"><button id="show-laws">Show laws panel</button></div><div class="row" style="margin-top:8px"><input id="repeal-number" type="number" min="1" max="9999" value="1" aria-label="Law number" style="width:70px;padding:8px;border-radius:8px;border:1px solid #39406b;background:#171a33;color:#eef0ff"><button id="repeal">Propose repeal</button></div><div class="hint">Starts a yes/no vote to remove law-N, same rules as a proposal.</div></div>
       <div class="section"><h2>Part review</h2><div class="row"><button id="preview-parts">Preview all parts</button></div><div class="hint">Cycles through all 15 creature parts, one second per part.</div></div>
       <div class="section"><h2>Sound</h2><div class="sound-controls"><label for="master-volume">Volume</label><input id="master-volume" type="range" min="0" max="100" value="35"><output id="volume-label">35%</output><button id="mute-sound" type="button">Mute</button></div><div class="hint">Sound is synthesized in the overlay and shared with its preview.</div></div>
       <div id="message" role="status" aria-live="polite">Select a viewer to begin.</div>
@@ -120,6 +122,10 @@
     }
     for (const button of document.querySelectorAll("[data-event]")) button.addEventListener("click", () => post("/api/sandbox/event", { event: button.dataset.event }));
     for (const button of document.querySelectorAll("[data-effect]")) button.addEventListener("click", () => post("/api/sandbox/effect", { effect: button.dataset.effect }));
+    document.getElementById("ballot-open").addEventListener("click", () => post("/api/sandbox/ballot/open", {}));
+    for (const button of document.querySelectorAll("[data-ballot]")) button.addEventListener("click", () => post("/api/sandbox/ballot/vote", { viewerId: viewer, option: Number(button.dataset.ballot) }));
+    document.getElementById("show-laws").addEventListener("click", () => post("/api/sandbox/laws", {}));
+    document.getElementById("repeal").addEventListener("click", () => post("/api/sandbox/repeal", { viewerId: viewer, lawNumber: Number(document.getElementById("repeal-number").value) }));
     const overlayFrame = document.querySelector("iframe");
     let overlayPreviewReady = false;
     let previewQueued = false;

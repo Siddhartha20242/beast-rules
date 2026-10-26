@@ -24,6 +24,8 @@ import { describeRule, displayUsername, lawForDisplay } from "./describe.js";
 import { createLawToast, lawToastsForSnapshot, pushLawToast, type LawToast } from "./law-toast.js";
 import { loadContractExamples } from "./law-hints.js";
 import { refusalForStatus, type RefusalStatus } from "./refusals.js";
+import { BallotManager, ballotForSnapshot, shouldOpenBallot, suggestLaws, type BallotOutcome } from "./ballot.js";
+import type { EventType } from "./compiler/types.js";
 
 const app = express();
 const server = createServer(app);
@@ -58,12 +60,26 @@ const voteTicker: VoteTickerEntry[] = [];
 let lawToasts: LawToast[] = [];
 const lawHints = loadContractExamples();
 const crowdScheduledFor = new Set<string>();
+const ballot = new BallotManager({ ballotSeconds: config.ballotSeconds });
+let nextBallotAt = config.ballotMinutes > 0 ? Date.now() + config.ballotMinutes * 60_000 : Number.POSITIVE_INFINITY;
+let ballotSequence = 0;
+let ballotOpening = false;
+let pendingRepeal: { proposalId: string; lawId: string; proposerName: string } | undefined;
+let lawsPanelUntil = 0;
+const recentEventTypes: EventType[] = [];
+const ballotBusyMessage = "A ballot is open. Vote 1, 2 or 3.";
 const crisisProposalMessage = "A constitutional crisis is underway. Wait for it to resolve before proposing another law.";
 const logDecision = (decision: string, fields: Record<string, string | number | boolean | undefined> = {}) => {
   console.info(formatDecisionLogLine(decision, fields));
 };
 
 app.use(express.json({ limit: "8kb" }));
+// Malformed or oversized request bodies get a short JSON error, never a stack trace.
+app.use((error: unknown, _request: express.Request, response: express.Response, next: express.NextFunction) => {
+  if (response.headersSent) { next(error); return; }
+  const status = typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : 400;
+  response.status(status >= 400 && status < 500 ? status : 400).json({ error: "Invalid request." });
+});
 app.use(express.static(resolve("public")));
 
 function makeSnapshot() {
@@ -80,9 +96,9 @@ function makeSnapshot() {
     }])),
     proposal: current ? {
       ...current,
-      text: pendingLaw ? describeRule(pendingLaw.rule) : undefined,
-      compiler_path: pendingLaw?.compilerPath,
-      proposer_name: pendingLaw ? displayUsername(pendingLaw.proposerName) : undefined,
+      text: pendingRepeal ? repealPrompt(pendingRepeal.lawId) : pendingLaw ? describeRule(pendingLaw.rule) : undefined,
+      compiler_path: pendingRepeal ? "repeal" : pendingLaw?.compilerPath,
+      proposer_name: pendingRepeal ? displayUsername(pendingRepeal.proposerName) : pendingLaw ? displayUsername(pendingLaw.proposerName) : undefined,
       yes: current.yes,
       no: current.no,
       total: current.voters
@@ -96,8 +112,16 @@ function makeSnapshot() {
     law_banner: lawBannerForSnapshot(lawBanner),
     vote_ticker: voteTickerForSnapshot(voteTicker),
     law_toasts: lawToastsForSnapshot(lawToasts),
-    law_hints: lawHints
+    law_hints: lawHints,
+    ballot: ballotForSnapshot(ballot.current),
+    laws_panel_until: lawsPanelUntil > Date.now() ? lawsPanelUntil : 0
   };
+}
+
+// Canonical text only: a repeal vote shows the law's description, never a viewer's words.
+function repealPrompt(lawId: string): string {
+  const law = engine.activeLaws.find((item) => item.id === lawId);
+  return law ? `Repeal ${lawId}? ${describeRule({ status: law.status, trigger: law.trigger, action: law.action, mutation: law.mutation })}` : `Repeal ${lawId}?`;
 }
 
 async function compileLaw(text: string): Promise<{ rule: Rule; path: CompilerPath }> {
@@ -151,8 +175,120 @@ function showNotice(message: string): void {
   broadcastMessage({ type: "notice", message, kind: "info" });
 }
 
+// Enact a law that passed a vote or won a ballot. A law that wants an occupied zone starts a crisis vote instead.
+function enactLaw(pending: { rule: Rule; text: string; compilerPath: CompilerPath; proposerName: string }): void {
+  const result = engine.beginCrisis(pending.rule, pending.text, config.crisisSeconds, pending.compilerPath, pending.proposerName);
+  if (result.status === "added") {
+    lawBanner = createLawBannerPayload("passed", result.law);
+    console.info(`Compiler ${compilerLabel(pending.compilerPath)} handled ${result.law.id}`);
+    logDecision("law_enacted", { id: result.law.id, zone: result.law.zone, part: result.law.mutation.part_id });
+    triggerLawAction(result.law.action.type, true);
+  } else if (result.status === "started") {
+    broadcastSound("vote_open");
+    broadcastSound("crisis_start");
+    lawBanner = createLawBannerPayload("passed", result.crisis.proposed, {
+      headline: "LAW PASSED · CRISIS VOTE",
+      relatedLaw: result.crisis.existing,
+      relatedLawRelation: "challenged"
+    });
+    console.info(`Compiler ${compilerLabel(pending.compilerPath)} handled ${result.crisis.proposed.id}`);
+    logDecision("crisis_started", {
+      zone: result.crisis.zone,
+      existing_id: result.crisis.existing.id,
+      proposed_id: result.crisis.proposed.id,
+      existing_text: result.crisis.existing.raw_text,
+      proposed_text: result.crisis.proposed.raw_text
+    });
+  }
+}
+
+function scheduleNextBallot(): void {
+  nextBallotAt = config.ballotMinutes > 0 ? Date.now() + config.ballotMinutes * 60_000 : Number.POSITIVE_INFINITY;
+}
+
+type StartResult = { ok: true } | { ok: false; message: string };
+
+async function openBallot(): Promise<StartResult> {
+  if (ballotOpening || ballot.isOpen) return { ok: false, message: ballotBusyMessage };
+  if (streamerControls.paused) return { ok: false, message: "The beast is paused. Ballots are disabled until the broadcaster resumes it." };
+  if (engine.currentCrisis) return { ok: false, message: crisisProposalMessage };
+  if (voting.current) return { ok: false, message: "A vote is already active." };
+  ballotOpening = true;
+  try {
+    const options = await suggestLaws({
+      activeParts: engine.activeLaws.map((law) => law.mutation.part_id),
+      recentEvents: recentEventTypes,
+      seed: ++ballotSequence,
+      compiler: templateCompiler
+    });
+    // Things can change while suggestions compile.
+    if (streamerControls.paused || engine.currentCrisis || voting.current) return { ok: false, message: "Something else started first; the ballot was skipped." };
+    if (!ballot.open(options)) return { ok: false, message: "Could not build enough suggestions for a ballot." };
+    pendingLaw = undefined;
+    pendingRepeal = undefined;
+    broadcastSound("vote_open");
+    logDecision("ballot_opened", { ballot_id: ballot.current?.ballotId, options: options.length });
+    broadcastSnapshot();
+    return { ok: true };
+  } finally {
+    ballotOpening = false;
+    scheduleNextBallot();
+  }
+}
+
+function handleBallotOutcome(outcome: BallotOutcome): void {
+  crowdScheduledFor.delete(`ballot:${outcome.ballotId}`);
+  logDecision("ballot_result", { ballot_id: outcome.ballotId, winner: outcome.winner?.number ?? 0, votes: outcome.votes.join("/"), total: outcome.total });
+  if (outcome.winner) {
+    broadcastSound("law_passed");
+    enactLaw({ rule: outcome.winner.rule, text: outcome.winner.text, compilerPath: "parser", proposerName: "Ballot" });
+  } else {
+    showNotice("The ballot closed with no votes.");
+  }
+  scheduleNextBallot();
+  broadcastSnapshot();
+}
+
+function startRepeal(proposerId: string, proposerName: string, lawNumber: number): StartResult {
+  if (streamerControls.paused) return { ok: false, message: "The beast is paused. Repeals are disabled until the broadcaster resumes it." };
+  if (engine.currentCrisis) return { ok: false, message: crisisProposalMessage };
+  if (ballot.isOpen) return { ok: false, message: ballotBusyMessage };
+  const law = engine.activeLaws.find((item) => item.id === `law-${lawNumber}`);
+  if (!law) return { ok: false, message: `There is no active law-${lawNumber}.` };
+  const proposalId = `repeal-${Date.now()}-${++proposalSequence}`;
+  if (!voting.startProposal(proposalId, proposerId)) return { ok: false, message: "A vote is active or this viewer is on proposal cooldown." };
+  pendingLaw = undefined;
+  pendingRepeal = { proposalId, lawId: law.id, proposerName };
+  lastConflict = undefined;
+  logDecision("repeal_proposed", { user: proposerName, user_id: proposerId, law_id: law.id, proposal_id: proposalId });
+  broadcastSound("vote_open");
+  broadcastSnapshot();
+  return { ok: true };
+}
+
+function noteEventType(eventType: EventType): void {
+  recentEventTypes.push(eventType);
+  if (recentEventTypes.length > 12) recentEventTypes.splice(0, recentEventTypes.length - 12);
+}
+
 async function handleTwitchChat(userId: string, userName: string, text: string, messageId: string): Promise<void> {
   const command = text.trim();
+  if (/^!laws$/i.test(command)) {
+    lawsPanelUntil = Date.now() + 6000;
+    logDecision("laws_panel", { user: userName, user_id: userId, message_id: messageId });
+    broadcastSnapshot();
+    return;
+  }
+  const repeal = command.match(/^!repeal\s+(?:law-)?(\d{1,4})\s*$/i);
+  if (repeal) {
+    const started = startRepeal(userId, userName, Number(repeal[1]));
+    logDecision("repeal_request", { user: userName, user_id: userId, law_number: Number(repeal[1]), started: started.ok, message_id: messageId });
+    if (!started.ok) {
+      showNotice(started.message);
+      twitchRuntime?.sendChatReply(started.message);
+    }
+    return;
+  }
   if (/^!law$/i.test(command)) {
     logDecision("law_proposal", { user: userName, user_id: userId, status: "missing_law_text", message_id: messageId });
     showRefusal("too_vague");
@@ -181,6 +317,11 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
       twitchRuntime?.sendChatReply(crisisProposalMessage);
       return;
     }
+    if (ballot.isOpen) {
+      logDecision("law_proposal", { user: userName, user_id: userId, status: "rejected_ballot_open", compiler_path: "not_run", text: lawText, message_id: messageId });
+      showNotice(ballotBusyMessage);
+      return;
+    }
     let rule: Rule;
     let compilerPath: CompilerPath;
     try {
@@ -203,6 +344,11 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
       twitchRuntime?.sendChatReply(crisisProposalMessage);
       return;
     }
+    if (ballot.isOpen) {
+      logDecision("law_proposal", { user: userName, user_id: userId, status: "rejected_ballot_opened_during_compile", compiler_path: compilerPath, text: lawText, message_id: messageId });
+      showNotice(ballotBusyMessage);
+      return;
+    }
     if (!voting.startProposal(proposalId, userId)) {
       logDecision("law_proposal", { user: userName, user_id: userId, status: "vote_already_active_or_cooldown", compiler_path: compilerPath, text: lawText, message_id: messageId });
       const message = "A vote is active or this viewer is on proposal cooldown.";
@@ -211,6 +357,7 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
       return;
     }
     pendingLaw = { id: proposalId, text: lawText, proposerId: userId, proposerName: userName, rule, compilerPath };
+    pendingRepeal = undefined;
     logDecision("law_proposed", { user: userName, user_id: userId, proposal_id: proposalId, compiler_path: compilerPath, status: rule.status, text: lawText });
     lastConflict = undefined;
     broadcastSound("vote_open");
@@ -223,6 +370,15 @@ async function handleTwitchChat(userId: string, userName: string, text: string, 
     logDecision("vote_cast", { kind: "crisis", user: userName, user_id: userId, choice: command, counted, message_id: messageId });
     if (counted) {
       recordVote(userName, command as "1" | "2", true);
+      broadcastSnapshot();
+    }
+    return;
+  }
+  if (ballot.isOpen && /^[123]$/.test(command)) {
+    const counted = ballot.vote(userId, Number(command));
+    logDecision("vote_cast", { kind: "ballot", user: userName, user_id: userId, choice: command, counted, message_id: messageId });
+    if (counted) {
+      recordVote(userName, command as "1" | "2" | "3", false);
       broadcastSnapshot();
     }
     return;
@@ -251,6 +407,7 @@ function handleTwitchEvent(name: Parameters<typeof translateTwitchEvent>[0], pay
       return;
     }
   }
+  if (!streamerControls.paused && name !== "chat") noteEventType(internal.event_type);
   const actorName = eventActorName(name, payload);
   const result = streamerControls.paused
     ? { ignored: false, fired: [] as ReturnType<RuleEngine["handleEvent"]>["fired"] }
@@ -262,7 +419,7 @@ function handleTwitchEvent(name: Parameters<typeof translateTwitchEvent>[0], pay
   }
   if (name === "chat" && chatDetails) {
     const { userId, userName, message, messageId } = chatDetails;
-    if (/^!law\b|^(?:1|2|yes|no)$/i.test(message.trim())) {
+    if (/^!(?:law|laws|repeal)\b|^(?:1|2|3|yes|no)$/i.test(message.trim())) {
       logDecision("chat_command_received", { user: userName, user_id: userId, message });
     }
     void handleTwitchChat(userId, userName, message, messageId);
@@ -300,8 +457,10 @@ function handleStreamerCommand(command: NonNullable<ReturnType<typeof parseStrea
     }
     engine.clearAllLaws();
     voting.cancelCurrent();
+    ballot.cancel();
     crowdScheduledFor.clear();
     pendingLaw = undefined;
+    pendingRepeal = undefined;
     lastConflict = undefined;
     lawBanner = undefined;
     logCommand("reset_applied");
@@ -312,10 +471,14 @@ function handleStreamerCommand(command: NonNullable<ReturnType<typeof parseStrea
   const proposal = voting.cancelCurrent();
   const currentCrisis = engine.currentCrisis;
   const crisis = engine.cancelCrisis();
+  const openBallotId = ballot.current?.ballotId;
+  const ballotCanceled = ballot.cancel();
   if (proposal) crowdScheduledFor.delete(proposal.proposalId);
   if (currentCrisis) crowdScheduledFor.delete(`crisis:${currentCrisis.proposed.id}`);
-  const canceled = Boolean(proposal || crisis);
-  if (canceled) pendingLaw = undefined;
+  if (openBallotId) crowdScheduledFor.delete(`ballot:${openBallotId}`);
+  const canceled = Boolean(proposal || crisis || ballotCanceled);
+  if (canceled) { pendingLaw = undefined; pendingRepeal = undefined; }
+  if (ballotCanceled) scheduleNextBallot();
   logCommand(canceled ? "vote_or_crisis_canceled" : "nothing_to_cancel");
   showNotice(canceled ? "The active vote or crisis was canceled." : "There is no active vote or crisis.");
   broadcastSnapshot();
@@ -359,6 +522,10 @@ app.post("/api/sandbox/propose", async (request, response) => {
     response.status(409).json({ error: "The beast is paused. New laws are disabled until it resumes." });
     return;
   }
+  if (ballot.isOpen) {
+    response.status(409).json({ error: ballotBusyMessage });
+    return;
+  }
 
   try {
     const { rule, path: compilerPath } = await compileLaw(text);
@@ -376,6 +543,7 @@ app.post("/api/sandbox/propose", async (request, response) => {
       return;
     }
     pendingLaw = { id: proposalId, text, proposerId, proposerName: proposerId, rule, compilerPath };
+    pendingRepeal = undefined;
     lastConflict = undefined;
     broadcastSound("vote_open");
     broadcastSnapshot();
@@ -406,8 +574,31 @@ app.post("/api/sandbox/crowd", (request, response) => {
   const yesBias = typeof rawBias === "number" && Number.isFinite(rawBias) ? Math.min(100, Math.max(0, rawBias)) : 80;
   const crisis = engine.currentCrisis;
   const proposal = voting.current;
+  const openBallotSnapshot = ballot.current;
+  if (openBallotSnapshot && !crisis && !proposal) {
+    const ballotKey = `ballot:${openBallotSnapshot.ballotId}`;
+    if (crowdScheduledFor.has(ballotKey)) {
+      response.status(409).json({ error: "The simulated crowd is already voting on this ballot." });
+      return;
+    }
+    crowdScheduledFor.add(ballotKey);
+    const windowMs = Math.max(0, openBallotSnapshot.endsAt - Date.now() - 350);
+    const numbers = openBallotSnapshot.options.map((option) => option.number);
+    for (let index = 1; index <= 8; index += 1) {
+      const username = `sim_viewer_${index}`;
+      const pick = numbers[Math.floor(Math.random() * numbers.length)]!;
+      setTimeout(() => {
+        if (ballot.current?.ballotId !== openBallotSnapshot.ballotId) return;
+        if (!ballot.vote(username, pick)) return;
+        recordVote(username, String(pick) as "1" | "2" | "3", false, true);
+        broadcastSnapshot();
+      }, Math.floor(Math.random() * windowMs));
+    }
+    response.json({ ok: true, message: "Eight SIM viewers will vote on the ballot at random times before it closes." });
+    return;
+  }
   if (!proposal && !crisis) {
-    response.status(409).json({ error: "Start a proposal vote before simulating the crowd." });
+    response.status(409).json({ error: "Start a proposal vote or a ballot before simulating the crowd." });
     return;
   }
   const voteKey = crisis ? `crisis:${crisis.proposed.id}` : proposal!.proposalId;
@@ -471,6 +662,7 @@ app.post("/api/sandbox/event", (request, response) => {
     return;
   }
 
+  if (!streamerControls.paused && eventName !== "chat-spike") noteEventType(eventType);
   const now = Date.now();
   const count = eventName === "chat-spike" ? 30 : 1;
   const fired = [];
@@ -490,6 +682,52 @@ app.post("/api/sandbox/event", (request, response) => {
   broadcastEffect("sim_event", true);
   broadcastSnapshot();
   response.json({ ok: true, event: eventName, fired: fired.map((law) => law.id) });
+});
+
+app.post("/api/sandbox/ballot/open", async (_request, response) => {
+  const result = await openBallot();
+  if (!result.ok) {
+    response.status(409).json({ error: result.message });
+    return;
+  }
+  response.json({ ok: true, message: "Ballot opened. Vote 1, 2 or 3 as a viewer." });
+});
+
+app.post("/api/sandbox/ballot/vote", (request, response) => {
+  const viewerId = typeof request.body?.viewerId === "string" ? request.body.viewerId : "";
+  const option = Number(request.body?.option);
+  if (!/^viewer_[1-5]$/.test(viewerId) || ![1, 2, 3].includes(option)) {
+    response.status(400).json({ error: "Choose a viewer and option 1, 2 or 3." });
+    return;
+  }
+  if (!ballot.vote(viewerId, option)) {
+    response.status(409).json({ error: "No open ballot, vote already used, or the ballot closed." });
+    return;
+  }
+  recordVote(viewerId, String(option) as "1" | "2" | "3", false);
+  broadcastSnapshot();
+  response.json({ ok: true });
+});
+
+app.post("/api/sandbox/repeal", (request, response) => {
+  const viewerId = typeof request.body?.viewerId === "string" ? request.body.viewerId : "";
+  const lawNumber = Number(request.body?.lawNumber);
+  if (!/^viewer_[1-5]$/.test(viewerId) || !Number.isInteger(lawNumber) || lawNumber < 1 || lawNumber > 9999) {
+    response.status(400).json({ error: "Choose a viewer and a law number." });
+    return;
+  }
+  const started = startRepeal(viewerId, viewerId, lawNumber);
+  if (!started.ok) {
+    response.status(409).json({ error: started.message });
+    return;
+  }
+  response.json({ ok: true, message: `Repeal vote for law-${lawNumber} started. Vote yes or no.` });
+});
+
+app.post("/api/sandbox/laws", (_request, response) => {
+  lawsPanelUntil = Date.now() + 6000;
+  broadcastSnapshot();
+  response.json({ ok: true, message: "Showing the laws panel on the overlay for 6 seconds." });
 });
 
 app.post("/api/sandbox/effect", (request, response) => {
@@ -529,36 +767,48 @@ setInterval(() => {
     return;
   }
 
+  const ballotOutcome = ballot.closeIfExpired();
+  if (ballotOutcome) {
+    handleBallotOutcome(ballotOutcome);
+    return;
+  }
+  if (shouldOpenBallot({
+    now: Date.now(),
+    nextAt: nextBallotAt,
+    ballotMinutes: config.ballotMinutes,
+    voteActive: Boolean(voting.current),
+    crisisActive: Boolean(engine.currentCrisis),
+    paused: streamerControls.paused,
+    ballotOpen: ballot.isOpen || ballotOpening
+  })) {
+    void openBallot();
+  }
+
   const outcome = voting.closeIfExpired();
   if (!outcome) return;
   crowdScheduledFor.delete(outcome.proposalId);
-  if (outcome.status === "passed") broadcastSound("law_passed");
   logDecision("vote_result", { proposal_id: outcome.proposalId, status: outcome.status, yes: outcome.yes, no: outcome.no, total: outcome.total });
-  if (outcome.status === "passed" && pendingLaw) {
-    const result = engine.beginCrisis(pendingLaw.rule, pendingLaw.text, config.crisisSeconds, pendingLaw.compilerPath, pendingLaw.proposerName);
-    if (result.status === "added") {
-      lawBanner = createLawBannerPayload("passed", result.law);
-      console.info(`Compiler ${compilerLabel(pendingLaw.compilerPath)} handled ${result.law.id}`);
-      logDecision("law_enacted", { id: result.law.id, zone: result.law.zone, part: result.law.mutation.part_id });
-      triggerLawAction(result.law.action.type, true);
-    } else if (result.status === "started") {
-      broadcastSound("vote_open");
-      broadcastSound("crisis_start");
-      lawBanner = createLawBannerPayload("passed", result.crisis.proposed, {
-        headline: "LAW PASSED · CRISIS VOTE",
-        relatedLaw: result.crisis.existing,
-        relatedLawRelation: "challenged"
-      });
-      console.info(`Compiler ${compilerLabel(pendingLaw.compilerPath)} handled ${result.crisis.proposed.id}`);
-      logDecision("crisis_started", {
-        zone: result.crisis.zone,
-        existing_id: result.crisis.existing.id,
-        proposed_id: result.crisis.proposed.id,
-        existing_text: result.crisis.existing.raw_text,
-        proposed_text: result.crisis.proposed.raw_text
-      });
+  if (pendingRepeal && pendingRepeal.proposalId === outcome.proposalId) {
+    const target = pendingRepeal;
+    pendingRepeal = undefined;
+    if (outcome.status === "passed") {
+      const removed = engine.repeal(target.lawId);
+      if (removed) {
+        broadcastSound("crisis_resolved");
+        lawBanner = createLawBannerPayload("crisis_resolved", removed, { headline: "LAW REPEALED" });
+        logDecision("law_repealed", { id: removed.id, zone: removed.zone, part: removed.mutation.part_id });
+        showNotice(`${target.lawId} was repealed.`);
+      } else {
+        showNotice(`${target.lawId} is already gone.`);
+      }
+    } else {
+      showNotice(`The vote to repeal ${target.lawId} did not pass.`);
     }
+    broadcastSnapshot();
+    return;
   }
+  if (outcome.status === "passed") broadcastSound("law_passed");
+  if (outcome.status === "passed" && pendingLaw) enactLaw(pendingLaw);
   pendingLaw = undefined;
   broadcastSnapshot();
   twitchRuntime?.sendChatReply(outcome.status === "passed" ? "The law passed." : "The law did not pass.");

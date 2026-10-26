@@ -1,6 +1,6 @@
 import { displayUsername } from "./describe.js";
 
-export type VoteTickerChoice = "yes" | "no" | "1" | "2";
+export type VoteTickerChoice = "yes" | "no" | "1" | "2" | "3";
 
 export interface VoteTickerEntry {
   username: string;

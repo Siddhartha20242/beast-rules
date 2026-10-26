@@ -6,12 +6,20 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function nonNegativeInteger(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 const compilerValue = process.env.COMPILER;
 
 export const config = {
   port: positiveInteger(process.env.PORT, 3000),
   voteSeconds: positiveInteger(process.env.VOTE_SECONDS, 30),
   crisisSeconds: positiveInteger(process.env.CRISIS_SECONDS, 20),
+  ballotMinutes: nonNegativeInteger(process.env.BALLOT_MINUTES, 5),
+  ballotSeconds: positiveInteger(process.env.BALLOT_SECONDS, 20),
   compiler: compilerValue === "ollama" || compilerValue === "template" ? compilerValue : "auto",
   ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
   ollamaModel: process.env.OLLAMA_MODEL ?? "gemma3:4b",

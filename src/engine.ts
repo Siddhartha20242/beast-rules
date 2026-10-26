@@ -209,6 +209,19 @@ export class RuleEngine {
     return current;
   }
 
+  /** Remove an active law (for example after a repeal vote). The law moves to history as repealed. */
+  repeal(lawId: string, reason = "repealed by vote"): HistoricalLaw | undefined {
+    const law = [...this.active.values()].find((item) => item.id === lawId);
+    if (!law) return undefined;
+    const record: HistoricalLaw = { ...law, repealed_at: this.clock(), overruled_by: "repealed", reason };
+    this.active.delete(law.zone);
+    this.history.push(record);
+    this.eventCounts.delete(law.id);
+    this.chatTimes.delete(law.id);
+    this.persist();
+    return record;
+  }
+
   clearAllLaws(): void {
     this.nextId = 1;
     this.active.clear();
