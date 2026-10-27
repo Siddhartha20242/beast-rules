@@ -256,3 +256,9 @@
 - **Not built (deliberate):** a desire with a long-term cost (needs multi-stream state design); a visible "unrecognized word" refusal. The latter is not a UI-only change: detecting which word the parser failed to map needs word-level tracking in the parser, and a heuristic version risks false refusals that would change the contract tests and the measured accuracy. Viewers already see the interpreted rule in the vote card (for example "grow yellow runes + confetti"), so a silent default is visible there.
 - **Checks:** `npm test` passed (268 tests across 20 files), `npm run build` passed, `npm run lint` passed, `git diff --check` clean.
 - **Failures and fixes:** (1) The portrait first rendered in an opaque dark square, then in a white one, because an iframe whose color scheme differs from its page gets an opaque canvas; the fix was to set `color-scheme: dark` on the iframe element itself. (2) A recap render raced the WebSocket and captured an empty default beast; the portrait now loads state directly. (3) A capture caught a part mid-fade; transitions are disabled in portrait mode. (4) A first attempt to patch the snapshot senders failed because a blank line between two functions was invisible in the excerpt I used; it was reapplied with exact patterns.
+
+## Live-recording scripts (written with another AI assistant, not Codex)
+
+- **Why:** A live test with the scheduled ballot set to one minute showed that an open ballot rejects `!law` proposals (`rejected_ballot_open`), so recording sessions need ballots off and opened on demand.
+- **Produced:** `npm run live` (short vote timers, `data-live` folder, `BALLOT_MINUTES=0`) and `npm run ballot` (opens a ballot through the existing sandbox endpoint). A README note explains both. No application code changed.
+- **Checks:** `npm test`, `npm run build` and `npm run lint` pass.

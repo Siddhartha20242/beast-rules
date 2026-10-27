@@ -174,6 +174,8 @@ Three things Codex got wrong, and what caught them:
 
 Required broadcaster scopes: `user:read:chat`, `moderator:read:followers`, `channel:read:subscriptions`, `bits:read`, and `channel:read:hype_train`. Raids require no OAuth scope. `user:write:chat` is optional and only needed with `CHAT_REPLIES=on`.
 
+For a recording session with real chat, `npm run live` starts the server with short vote timers, a separate `data-live` folder (your real beast is untouched) and scheduled ballots turned off, because a ballot blocks new `!law` proposals while it is open. Open one on demand with `npm run ballot`; chat then types `1`, `2` or `3`. Each viewer can propose once a minute, and only one vote runs at a time.
+
 For local EventSub mocks, run `twitch event websocket start-server --port 8080`, set `TWURPLE_MOCK_API_PORT=8080` (or `TWITCH_EVENTSUB_WS_URL`), then trigger events with `twitch event trigger channel.follow -T websocket --session SESSION_ID -u BROADCASTER_ID`. The Twitch CLI's available payload options vary by version.
 
 ### OBS scene setup
