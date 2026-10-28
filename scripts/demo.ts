@@ -93,12 +93,16 @@ async function main(): Promise<void> {
   await waitForServer();
   console.log("Beast Rules demo");
   console.log("================");
-  console.log(`Overlay for recording (open in a browser or OBS):\n  ${base}/overlay.html?obs=1&sound=on`);
+  console.log(`Overlay for recording (open in a browser or OBS):\n  ${base}/overlay.html?obs=1&sound=on&bg=dark`);
   console.log(`Constitution page (shown at the end):\n  ${base}/constitution.html`);
   console.log("\nEverything here is simulated: the viewers are viewer_1 to viewer_5 and follow/sub events are labelled SIM on screen.");
   console.log("Say so in the video. Your real beast and your Twitch connection are not used.\n");
 
-  if (process.stdin.isTTY) {
+  const autoStartSeconds = Number(process.env.DEMO_DELAY ?? 0);
+  if (autoStartSeconds > 0) {
+    console.log(`Starting by itself in ${autoStartSeconds} seconds. Open the overlay and start your screen recording now.`);
+    await sleep(autoStartSeconds);
+  } else if (process.stdin.isTTY) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     await new Promise<void>((resolve) => rl.question("Start recording, then press Enter to begin... ", () => { rl.close(); resolve(); }));
   } else {

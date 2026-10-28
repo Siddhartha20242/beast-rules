@@ -306,6 +306,8 @@
     let latestState;
     let lastEvolutionTier;
     let partPreviewTimer;
+    // ?bg=dark paints a dark backdrop for screen recordings made in a normal browser tab (OBS keeps it transparent).
+    if (new URLSearchParams(location.search).get("bg") === "dark") document.documentElement.style.setProperty("background", "#0b1020", "important");
     // Small "Twitch reconnecting" dot for the streamer's own browser tab. Hidden in OBS with ?obs=1.
     (function watchTwitchStatus() {
       if (new URLSearchParams(location.search).get("obs") === "1") return;

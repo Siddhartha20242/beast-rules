@@ -269,3 +269,9 @@
 - **Produced:** One line in `public/overlay.html`: the small line under the rule now reads "proposed by <name> · parser". The name is the existing capped, control-stripped value and is written with `textContent`.
 - **Checks:** `npm test`, `npm run build` and `npm run lint` pass.
 
+## Easier screen recording: dark backdrop URL and auto-start demo (written with another AI assistant, not Codex)
+
+- **Why:** Recording the overlay in a normal browser tab needed a console command for a dark backdrop, and the demo needed Enter to be pressed during the recording.
+- **Produced:** `?bg=dark` on the overlay URL paints a dark backdrop (OBS stays transparent without it). `npm run demo:auto` starts the demo by itself after 20 seconds (`DEMO_DELAY`); `npm run demo` still waits for Enter. The demo prints the `bg=dark` URL.
+- **Checks:** `npm test` (268), `npm run build` and `npm run lint` pass; the computed page background was confirmed in a browser.
+
