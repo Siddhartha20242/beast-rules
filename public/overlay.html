@@ -728,7 +728,7 @@
       if (proposal) {
         const total = Math.max(1, proposal.yes + proposal.no);
         document.getElementById("proposal-text").textContent = proposal.text || "New law";
-        document.getElementById("proposal-compiler").textContent = proposal.compiler_path || "parser";
+        document.getElementById("proposal-compiler").textContent = (proposal.proposer_name ? `proposed by ${proposal.proposer_name} · ` : "") + (proposal.compiler_path || "parser");
         document.getElementById("yes-bar").style.width = `${proposal.yes / total * 100}%`;
         document.getElementById("no-bar").style.width = `${proposal.no / total * 100}%`;
         document.getElementById("yes-label").textContent = `YES ${proposal.yes}`;

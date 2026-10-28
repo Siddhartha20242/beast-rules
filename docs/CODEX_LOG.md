@@ -262,3 +262,10 @@
 - **Why:** A live test with the scheduled ballot set to one minute showed that an open ballot rejects `!law` proposals (`rejected_ballot_open`), so recording sessions need ballots off and opened on demand.
 - **Produced:** `npm run live` (short vote timers, `data-live` folder, `BALLOT_MINUTES=0`) and `npm run ballot` (opens a ballot through the existing sandbox endpoint). A README note explains both. No application code changed.
 - **Checks:** `npm test`, `npm run build` and `npm run lint` pass.
+
+## Proposer name on the vote card (written with another AI assistant, not Codex)
+
+- **Why:** The snapshot already carried the capped proposer name, but the vote card did not show it, so a viewer could not see who wrote the law being voted on.
+- **Produced:** One line in `public/overlay.html`: the small line under the rule now reads "proposed by <name> · parser". The name is the existing capped, control-stripped value and is written with `textContent`.
+- **Checks:** `npm test`, `npm run build` and `npm run lint` pass.
+
