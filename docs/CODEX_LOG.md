@@ -281,3 +281,9 @@
 - **Produced:** `scripts/refusals.ts` and `npm run refusals`, which send the two demo refusal sentences to a running demo or sandbox server, five seconds apart. No application code changed.
 - **Checks:** run against a live server (two 422 refusals), `npm run lint` and `npm run build` pass.
 
+## `npm run crisis:setup` and `npm run crisis` for recording (written with another AI assistant, not Codex)
+
+- **Why:** The constitutional crisis is the most important scene to capture cleanly, and inside the full demo it is hard to cut out.
+- **Produced:** `scripts/crisis.ts`. `crisis:setup` passes the first law (horns); `crisis` proposes the competing law (red eyes), votes, runs the crisis and waits for the verdict. They drive the existing sandbox endpoints against a server started with `VOTE_SECONDS=6 CRISIS_SECONDS=8`. No application code changed.
+- **Checks:** run against a live server: the new law won the crisis and replaced the horns law (`law-2`, zone head). `npm run lint` and `npm run build` pass.
+
