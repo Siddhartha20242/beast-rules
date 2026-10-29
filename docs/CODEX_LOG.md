@@ -275,3 +275,9 @@
 - **Produced:** `?bg=dark` on the overlay URL paints a dark backdrop (OBS stays transparent without it). `npm run demo:auto` starts the demo by itself after 20 seconds (`DEMO_DELAY`); `npm run demo` still waits for Enter. The demo prints the `bg=dark` URL.
 - **Checks:** `npm test` (268), `npm run build` and `npm run lint` pass; the computed page background was confirmed in a browser.
 
+## `npm run refusals` for recording (written with another AI assistant, not Codex)
+
+- **Why:** Recording the two refusal examples on their own required long `curl` commands with nested quotes that broke when pasted into a terminal.
+- **Produced:** `scripts/refusals.ts` and `npm run refusals`, which send the two demo refusal sentences to a running demo or sandbox server, five seconds apart. No application code changed.
+- **Checks:** run against a live server (two 422 refusals), `npm run lint` and `npm run build` pass.
+

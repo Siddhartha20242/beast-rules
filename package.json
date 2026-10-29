@@ -16,6 +16,7 @@
     "live": "DATA_DIR=data-live VOTE_SECONDS=15 CRISIS_SECONDS=15 BALLOT_MINUTES=0 BALLOT_SECONDS=15 node --import tsx src/server.ts",
     "ballot": "curl -s -X POST localhost:3000/api/sandbox/ballot/open",
     "demo": "node --import tsx scripts/demo.ts",
+    "refusals": "node --import tsx scripts/refusals.ts",
     "demo:auto": "DEMO_DELAY=20 node --import tsx scripts/demo.ts",
     "recap": "node --import tsx scripts/recap.ts"
   },
