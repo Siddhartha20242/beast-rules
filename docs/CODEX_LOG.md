@@ -293,3 +293,9 @@
 - **Produced:** `scripts/crisis.ts` now polls `/api/state`. `crisis:setup` waits for the horns law to be in force; `crisis` refuses to run without a head law, waits for the crisis to open and for it to finish, and stops with a plain message if anything is missing. No application code changed.
 - **Checks:** run live in four cases: crisis without setup (stops with a clear message), setup then crisis with short timers (new law wins, scar in the head zone), setup run twice (stops with a clear message), and setup then crisis with default timers (87 seconds, same result). `npm run lint` and `npm run build` pass.
 
+## `npm run ballot:scene` for recording (written with another AI assistant, not Codex)
+
+- **Why:** The numbered ballot needed a short, repeatable way to be screen-recorded on its own, like the refusal and crisis scenes.
+- **Produced:** `scripts/ballot-scene.ts` and `npm run ballot:scene`, which open a ballot on a running sandbox server, cast simulated votes (three for option 2, one for option 1) and wait for the winner. It watches the server state and stops with a plain message if the ballot cannot open. No application code changed.
+- **Checks:** run live: the winning suggestion became a law on the beast. `npm run lint` and `npm run build` pass.
+
