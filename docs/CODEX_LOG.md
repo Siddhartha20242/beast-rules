@@ -287,3 +287,9 @@
 - **Produced:** `scripts/crisis.ts`. `crisis:setup` passes the first law (horns); `crisis` proposes the competing law (red eyes), votes, runs the crisis and waits for the verdict. They drive the existing sandbox endpoints against a server started with `VOTE_SECONDS=6 CRISIS_SECONDS=8`. No application code changed.
 - **Checks:** run against a live server: the new law won the crisis and replaced the horns law (`law-2`, zone head). `npm run lint` and `npm run build` pass.
 
+## Crisis recording scripts made to watch the server (written with another AI assistant, not Codex)
+
+- **Why:** A first version of `npm run crisis` used fixed delays. On a server started without the short timers (30-second votes) it printed "Crisis open" and "Done" even though the new law had not yet passed and no crisis ever started.
+- **Produced:** `scripts/crisis.ts` now polls `/api/state`. `crisis:setup` waits for the horns law to be in force; `crisis` refuses to run without a head law, waits for the crisis to open and for it to finish, and stops with a plain message if anything is missing. No application code changed.
+- **Checks:** run live in four cases: crisis without setup (stops with a clear message), setup then crisis with short timers (new law wins, scar in the head zone), setup run twice (stops with a clear message), and setup then crisis with default timers (87 seconds, same result). `npm run lint` and `npm run build` pass.
+
