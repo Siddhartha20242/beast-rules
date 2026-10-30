@@ -305,3 +305,9 @@
 - **Produced:** `scripts/panel.ts` and `npm run panel [constitution|laws|tongue]`, which call the existing sandbox panel endpoint. No application code changed.
 - **Checks:** run live after a crisis and a ballot: the overlay showed the constitution panel and `/constitution.html` listed the overruled and in-force articles. `npm run lint` and `npm run build` pass.
 
+## `npm run repeal:scene` for recording (written with another AI assistant, not Codex)
+
+- **Why:** The repeal scene needed a repeatable one-command recording, like the refusal, crisis and ballot scenes.
+- **Produced:** `scripts/repeal-scene.ts` and `npm run repeal:scene [law number]`, which propose repealing a law (by default the newest one in force) on a running sandbox server, cast three yes votes and wait for the result. It stops with a plain message if the beast has no laws or a vote is already running. No application code changed.
+- **Checks:** run live after a crisis: the repeal vote passed, the banner read "LAW REPEALED", and the head zone showed a second scar. `npm run lint` and `npm run build` pass.
+
