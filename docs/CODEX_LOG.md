@@ -311,3 +311,9 @@
 - **Produced:** `scripts/repeal-scene.ts` and `npm run repeal:scene [law number]`, which propose repealing a law (by default the newest one in force) on a running sandbox server, cast three yes votes and wait for the result. It stops with a plain message if the beast has no laws or a vote is already running. No application code changed.
 - **Checks:** run live after a crisis: the repeal vote passed, the banner read "LAW REPEALED", and the head zone showed a second scar. `npm run lint` and `npm run build` pass.
 
+## `npm run live:guide` prompter for the live recording (written with another AI assistant, not Codex)
+
+- **Why:** In a live Twitch take the crisis was missed because the people typing did not know when each vote window was open; no crisis votes were cast.
+- **Produced:** `scripts/live-guide.ts` and `npm run live:guide`, a read-only prompter that polls `/api/state` and prints in the terminal when a vote opens, when a law passes (and the follow can happen) and when a crisis opens. It never changes anything on the server. No application code changed.
+- **Checks:** run against a test server while the crisis scripts played: it printed the vote, law-passed, second vote, crisis and crisis-over prompts in order. `npm run lint` and `npm run build` pass.
+
