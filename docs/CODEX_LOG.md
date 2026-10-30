@@ -1,5 +1,9 @@
 # Codex build log
 
+This is the step-by-step record of how Beast Rules was built. Each entry gives the prompt, what came back, what failed and what changed.
+
+Entries are in the order the work happened. The ones without a label were done in my Codex thread, and I kept them close to how Codex reported them, failures included. Codex's free credits ran out right after the rename to Beast Rules. Every entry after that is labelled "(written with another AI assistant, not Codex)". I chose what to build and what to keep in both cases, but the code in the labelled entries was not written by Codex.
+
 ## Judge-focused README revision
 
 - **Prompt summary:** Restructure the README for a two-minute judge skim; add screenshot/GIF placeholders, demo-video and Devpost placeholders, a parser-generated schema-valid example, an accurate tested-feature list, compact accuracy table, concrete Codex build history with resolved failures, Twitch app-category clarification, valid GitHub Mermaid, and remove the placeholder `demo` script. Run tests, build, and lint.

@@ -1,23 +1,12 @@
 # Beast Rules
 
-**Chat writes the laws of the stream, and the laws are the creature: the beast is a state machine you can see.** Every law in force occupies one part of its body, and a repealed or defeated law leaves a visible scar. The rule system and the picture on screen are the same object.
+Beast Rules is a Twitch overlay where chat writes the rules of the stream and the rules are the creature. A viewer types `!law when someone subs grow wings`. Chat votes. If it passes, the beast grows wings on screen, and from then on the law fires on real Twitch events.
 
-A viewer types `!law when someone subs grow wings`. Chat votes. If it passes, the beast grows wings and the law fires on real Twitch events from then on.
+Each law in force takes one part of the beast's body. When two laws want the same part, chat votes on which one survives, and the loser leaves a scar. The beast is a state machine you can see: its body is the list of laws, and its scars are the laws that lost.
+
+I built it alone for the Codex x TwitchCon Hackathon. Codex wrote most of the code. When its free credits ran out I finished the last features with another AI assistant, and the [build log](docs/CODEX_LOG.md) says which step is which.
 
 ![How a law travels from Twitch chat to the beast](docs/images/architecture.png)
-
-## Why this is different
-
-| Kind of stream tool | What the viewer does | What Beast Rules does instead |
-| --- | --- | --- |
-| Node-editor automation | Nothing. The streamer builds the logic alone, in a graph most viewers cannot read. | Viewers write the logic in one plain-English sentence, and the result is a picture instead of a graph. |
-| Chat pets and creatures | Feed or pet something that is separate from any rules. | The creature has no stats to feed. Its body is the list of laws, so a new law is a new part. |
-| "Chat prompts an AI" overlays | Type a prompt and read whatever text comes back. | No model text ever reaches the screen. Input becomes a closed-schema rule or a fixed refusal. |
-| Reward menus | Pick from options the streamer prepared. | Chat invents the option, votes on it, and can repeal it later. |
-
-This is a comparison of categories, not of specific products.
-
-**Adoption path:** run `npm run sandbox`, see the whole arc in about a minute, then add the overlay URL to OBS as a browser source.
 
 ## Try it in 60 seconds
 
@@ -25,17 +14,28 @@ This is a comparison of categories, not of specific products.
 npm install && npm run sandbox
 ```
 
-Or watch the whole story play itself (a law, a crisis, a repeal, a naming vote, the constitution) with no setup:
+Open [localhost:3000/sandbox.html](http://localhost:3000/sandbox.html) to play with simulated viewers. The transparent overlay for OBS is at [localhost:3000/overlay.html](http://localhost:3000/overlay.html). No Twitch credentials are needed, and Ollama is optional.
+
+If you would rather watch than click, this plays the whole story by itself (a law, a crisis, a repeal, a naming vote, the constitution):
 
 ```sh
 npm run demo
 ```
 
-No credentials are needed. Open [localhost:3000/sandbox.html](http://localhost:3000/sandbox.html); the transparent OBS browser source is [localhost:3000/overlay.html](http://localhost:3000/overlay.html). Ollama is optional.
+To use it on a real stream, add the overlay URL to OBS as a browser source and follow the Twitch setup below.
 
-## Safety gate
+## How it differs from other stream tools
 
-Viewer proposals are compiled into closed-schema rules. The original chat sentence is kept for server-side logs and persisted history only; the overlay and sandbox receive a canonical description assembled from validated trigger, action, part, and color enums. Refusal and error messages shown to viewers are fixed text, and displayed usernames are control-character-stripped, capped at 24 characters, and rendered as text.
+- Node-editor automation tools ask the streamer to build the logic alone, in a graph most viewers cannot read. Here a viewer writes the logic as one sentence, and the result is a picture.
+- Chat pets give viewers something to feed. This creature has no stats. Its body is the list of laws.
+- Overlays that let chat prompt an AI show whatever text comes back. Here no model text reaches the screen. A proposal becomes a rule from a closed list, or the beast refuses it.
+- Reward menus offer choices the streamer prepared. Here chat invents the choice, votes on it, and can repeal it later.
+
+These are categories, not specific products.
+
+## Safety
+
+Nothing a viewer types is shown on screen. A proposal is compiled into a rule built from fixed lists of triggers, actions, parts and colors, and the overlay shows a description assembled from those validated values. The original sentence stays in server logs and saved history only. Refusals are fixed messages in the beast's voice, and usernames are stripped of control characters, cut to 24 characters and drawn as plain text.
 
 ```mermaid
 flowchart LR
@@ -48,9 +48,9 @@ flowchart LR
   E --> G[Overlay]
 ```
 
-The model can only emit values from the schema; verified model results pass schema validation before the deterministic engine handles them.
+The deterministic parser handles every sentence it understands. If you run a local model, it only gets the sentences the parser could not decide, it can only return values from the schema, and its answer has to pass a verifier and then the schema before the rule engine sees it.
 
-## Example law
+## An example law
 
 Chat sends:
 
@@ -58,7 +58,7 @@ Chat sends:
 when someone subs grow wings and shake the screen
 ```
 
-The real TemplateCompiler produces this schema-valid rule:
+The real parser produces this rule, which passes the schema:
 
 ```json
 {
@@ -78,20 +78,22 @@ The real TemplateCompiler produces this schema-valid rule:
 }
 ```
 
-When the vote passes, the overlay shows the law-passed banner and pulses the wings; a subscription then triggers the screen shake.
+When the vote passes, the overlay shows a banner and the wings grow. After that, each subscription triggers the screen shake.
 
-## How we measured compile accuracy
+## How accurate is the compiler
+
+I measured it on sets of 30 sentences.
 
 | Set | Parser alone | With local-model rescue | Note |
 | --- | ---: | ---: | --- |
-| Contract (`tests/laws.json`, 28 cases) | 28/28 | n/a | Written alongside the parser, so it is a regression suite, not a test of generalization. |
+| Contract (`tests/laws.json`, 28 cases) | 28/28 | n/a | Written alongside the parser, so it is a regression suite and not a test of generalization. |
 | Held-out set 1 | 18/30 | 24/30, later 25/30 | Became a development set once its failures were fixed. |
-| Held-out set 2, first two runs | 23/30 (76.7%) | 24/30 and 25/30 | Its failures were then fixed, so the parser now scores 28/30 on it. That number is no longer an independent measure. |
-| **Held-out set 3 (`tests/heldout3.json`)** | **25/30 (83.3%)** | **26/30 (86.7%)** | 30 new phrasings written after the last parser change, run once, never tuned against. Paths: parser 26, model (verified) 1, parser (model rejected) 3. |
+| Held-out set 2, first two runs | 23/30 (76.7%) | 24/30 and 25/30 | Its failures were fixed afterwards, so the parser now scores 28/30 on it. That number no longer measures anything independent. |
+| Held-out set 3 (`tests/heldout3.json`) | 25/30 (83.3%) | 26/30 (86.7%) | 30 new phrasings, written after the last parser change, run once and never tuned against. Paths taken: parser 26, model (verified) 1, parser (model rejected) 3. |
 
-The four misses on set 3 share one weakness: when a sentence names an effect or part the beast does not know ("moonwalk", "jetpack"), or is vague or destructive ("do something cool on subs", "delete the chat history"), the parser can fall back to a harmless default rule instead of refusing. The result is safe, because the closed vocabulary cannot do anything harmful, but it is the wrong feedback for a viewer. It is a known limitation, not fixed here, so the set stays an honest measurement.
+The four misses on set 3 have one thing in common. When a sentence names an effect or a part the beast does not know ("moonwalk", "jetpack"), or is vague or destructive ("do something cool on subs", "delete the chat history"), the parser can fall back to a harmless default rule instead of refusing. That is safe, because the closed vocabulary cannot do anything harmful, but it gives the viewer the wrong feedback. I left it unfixed so the set stays an honest measurement.
 
-Run `npm run eval -- --file tests/heldout3.json --verbose` to reproduce. The model rescue varies between runs, and these small sets measure only their own phrasings, not general language understanding.
+To reproduce the numbers, run `npm run eval -- --file tests/heldout3.json --verbose`. The model's rescue results vary between runs, and sets this small only measure their own phrasings.
 
 <details>
 <summary>All 28 contract cases, as the real parser handles them today</summary>
@@ -129,75 +131,91 @@ Run `npm run eval -- --file tests/heldout3.json --verbose` to reproduce. The mod
 
 </details>
 
-## What works today
+## What it does
 
-- Schema-validated template parsing, with 28/28 contract cases passing; optional local Ollama rescue uses a verifier and falls back safely.
-- Persistent proposals, voting, zone replacement, constitutional crisis votes, streamer pause/resume/reset/veto controls, and overlay snapshots.
-- Transparent SVG beast overlay with five evolution tiers, all 15 parts, law-passed and crisis-resolution banners, proposer credits, and a live vote ticker.
-- Synthesized Web Audio cues (no audio files), plus sandbox crowd simulation with adjustable yes bias and direct buttons for the four overlay effects.
-- Twitch EventSub WebSocket integration for chat, follow, subscription, gift, cheer, raid, and hype-train events; chat command translation and fixtures are tested. `/health` reports service state.
-- OBS scene actions mapped to server-configured scene names; the adapter is tested with mocks only. Live OBS switching has not been verified.
-- **Numbered ballot.** Every `BALLOT_MINUTES` (default 5, `0` turns it off) the overlay offers three suggested laws for `BALLOT_SECONDS` (default 20). Chat types `1`, `2` or `3`; the winner is enacted with no second vote (a tie goes to the lower number, and no votes means no winner). Suggestions are built deterministically from templates, run through the real parser (anything that does not compile is discarded), favour empty body zones and recent event types, and never repeat a part already on the beast. Only canonical descriptions are shown.
-- **`!laws` and `!repeal`.** `!laws` shows a six-second panel of the active laws; `!repeal 3` opens a yes/no vote to remove `law-3` (same rules as a proposal: one vote at a time, per-viewer cooldown, blocked while paused, during a crisis or during a ballot). A repealed law moves to history as "repealed" and its zone is free again.
-- Malformed requests to the sandbox API get a short JSON error, never a stack trace.
-- **Captions without a narrator.** Every new law's banner carries its own caption: article number, the law's title, the vote result ("passed 3-1", "won the ballot 3 of 4 votes", "survived 3-1") and its sponsor. When a law fires, the toast names the sponsor too.
-- **The beast wants things.** It shows one visible desire derived from its mood and gaps ("Pebble wants a law about raids") and reacts when chat satisfies it ("Pebble is pleased"). A resolved crisis or repeal draws a crack on the beast with a thud.
-- **A cover for the constitution.** `/constitution.html` opens with the beast's name, temperament, the date chat ratified it and an integrity score (the share of all laws ever written that are still in force).
-- **A shareable recap card.** `/recap.html` is a 1200x630 card with the beast's portrait, its name and temperament, laws in force, scars and top lawmakers. With the server running, `npm run recap` saves it as a PNG (it needs Chrome, Chromium or Edge) for Discord or Twitch.
-- **A moment of silence before the verdict.** When a crisis ends, the overlay holds on the two cards for 1.5 seconds with the alarm cut and one low tone, then reveals the result and the crack. Law banners lead with what happened ("The beast grew yellow wings. · passed 3-1 · written by viewer_2"), and the law's sponsor gets a loud, colored shout when it fires.
-- **`npm run demo`** plays the whole story by itself against an isolated copy of the app: it starts its own server on its own port with a temporary data folder, never touches your real beast or Twitch, and runs a law, a firing event, refusals, a crisis, a ballot, a repeal, a naming vote and the constitution. The viewers are simulated (viewer_1 to viewer_5) and events carry a SIM tag.
-- **The beast as a character.** Chat names it once through a vote among a fixed list of names (`!name`; viewer text can never become the name). Every law has a canonical title built from validated values ("Follower's Yellow Horns"). The beast shows a temperament computed from its laws and history: ferocity (Fierce, Wary or Calm, from aggressive parts and loud effects) and order (Orderly, Restless or Chaotic, from how many laws were repealed or overruled). Its idle animation follows its mood.
-- **Scars.** A law that is repealed or loses a crisis leaves a crack on the beast in that body zone (up to three per zone), so the beast is a record of conflict, not just accumulation.
-- **The constitution.** `!constitution` shows the active laws on the overlay, and `/constitution.html` is a printable document listing every law ever written with its title, proposer, date and status (in force, repealed or overruled).
-- **The beast's tongue.** Refusals speak as the beast ("The beast cannot hear that…") and `!tongue` lists its whole vocabulary. The closed vocabulary is the beast's language: it cannot embody what it cannot say.
+Laws and votes:
+- Viewers propose laws with `!law` and vote with `yes` or `no`. One vote runs at a time, each viewer has a cooldown, and the streamer can pause, resume, veto or reset.
+- Each body zone holds one law. A law in an occupied zone triggers a crisis vote between the old law and the new one. A short silence before the verdict gives the vote some weight, and the loser leaves a crack on the beast.
+- `!repeal 3` opens a vote to remove `law-3`, which also leaves a scar.
+- Every few minutes (`BALLOT_MINUTES`, default 5, `0` turns it off) the overlay offers three suggested laws, and chat types `1`, `2` or `3`. The suggestions are built from templates, run through the real parser, and favor empty body zones and recent events.
+
+The creature:
+- A transparent SVG beast with 15 parts, five evolution tiers and a live vote ticker.
+- Chat names it once through a vote among a fixed list (`!name`). Viewer text can never become the name.
+- It shows a temperament computed from its laws and history, a visible desire ("Pebble wants a law about raids") and a mood that drives its idle animation.
+- Law banners lead with what happened ("The beast grew yellow wings. passed 3-1. written by viewer_2"), and the law's sponsor gets a shout when it fires.
+- Refusals speak in the beast's voice, and `!tongue` lists its whole vocabulary.
+
+Twitch:
+- EventSub over WebSocket for chat, follows, subscriptions, gift subscriptions, cheers, raids and hype trains. `/health` reports the state of each subscription.
+- OBS scene actions mapped to scene names you set. This is tested with mocks only. I have not tried live OBS switching.
+- Synthesized sound cues, with no audio files.
+
+Documents you can share:
+- `!constitution` lists the active laws on the overlay. `/constitution.html` is a printable constitution with a cover (the beast's name, temperament, ratification date and an integrity score) and every law ever written, with its title, proposer, date and status.
+- `/recap.html` is a 1200x630 card with the beast's portrait, its laws and its top lawmakers. `npm run recap` saves it as a PNG for Discord (it needs Chrome, Chromium or Edge).
 
 ## How Codex built this
 
-This project was built in one Codex thread from a written spec: `AGENTS.md`, the JSON schema, and contract tests guided the implementation. Each roadmap step ended with tests, build, and lint; the current suite has **268 tests across 20 files**. Codex ran out of free credits near the end, so several late changes were written with a different AI assistant instead and are labelled that way in the log: the network-resilience fix, the ballot and repeal features, the chat-command parser, and the beast character and constitution features. The detailed history is in [docs/CODEX_LOG.md](docs/CODEX_LOG.md).
+I built this in one Codex thread, from a written spec: `AGENTS.md`, a JSON schema and contract tests. The spec and the step-by-step prompts were drafted with help from another AI assistant. I chose what to build, ran every step in Codex, and decided what stayed. Each step ended with tests, a build and a lint, and the suite now has 268 tests in 20 files. The [build log](docs/CODEX_LOG.md) records each step, including the failures.
+
+Codex built the compiler, the rule engine, the overlay, the crisis votes, the sounds, the safety layer, the toasts, the hints and the fixed refusal messages. Its free credits ran out after the rename to Beast Rules. After that I finished the work with another AI assistant: the network-resilience fix, the ballot and repeal, the chat-command parser, the beast's character and the constitution, the recap card, and the recording scripts. Those log entries are labelled "written with another AI assistant, not Codex."
 
 Three things Codex got wrong, and what caught them:
 
-1. **A wrong field name.** The first parser emitted `eventType` where the schema requires `event_type`. The first contract run failed 22 cases, the parser was fixed, and the schema stayed the source of truth ([log entry](docs/CODEX_LOG.md#roadmap-step-2--templatecompiler-only)).
-2. **A verifier that matched too loosely.** The check that a model-proposed rule agrees with the viewer's words treated "scene" as a fuzzy match for the colour "green". Tests caught it before the evaluation set was run, and the fuzzy match now requires the same prefix ([log entry](docs/CODEX_LOG.md#parser-numbercolor-support-effect-verification-and-heldout2-evaluation)).
-3. **A model that was too slow and too trusting.** A real `gemma3:4b` call took 6.5 seconds, longer than the five-second timeout, and held-out runs showed the model alone was less reliable than hoped. The design changed to parser first, with the model allowed only to rescue refusals behind a verifier ([log entry](docs/CODEX_LOG.md#ollama-compiler-and-automatic-fallback)).
+1. The first parser emitted `eventType` where the schema requires `event_type`. The first contract run failed 22 cases. The parser was fixed and the schema stayed the source of truth ([log entry](docs/CODEX_LOG.md#roadmap-step-2--templatecompiler-only)).
+2. The check that a model's rule agrees with the viewer's words treated "scene" as a fuzzy match for the color "green". The tests caught it before I ran the evaluation set, and the fuzzy match now requires the same prefix ([log entry](docs/CODEX_LOG.md#parser-numbercolor-support-effect-verification-and-heldout2-evaluation)).
+3. A real `gemma3:4b` call took 6.5 seconds, longer than the five-second timeout, and the held-out runs showed the model alone was less reliable than I had hoped. The design changed to parser first, with the model allowed to rescue only the sentences the parser refuses, behind a verifier ([log entry](docs/CODEX_LOG.md#ollama-compiler-and-automatic-fallback)).
 
-**The runtime is built so a model cannot hurt the stream.** The deterministic parser handles every sentence it understands. The optional local model can only choose values from the closed schema, and a verifier can reject its answer. No model text ever reaches the screen. **No runtime model call goes through Codex:** law compilation uses the local parser and, when configured, a local Ollama server.
+No model call at runtime goes through Codex. Laws are compiled by the local parser and, if you run one, a local Ollama model.
 
 ## Twitch setup and live test
 
-1. Create a Twitch developer app. The app category does not matter; selecting “Chat Bot” is not required. Set the redirect URL to `http://localhost:3001/auth/callback`.
-2. Put the client ID and secret in `.env` as `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`; set `TWITCH_REDIRECT_URI=http://localhost:3001/auth/callback`.
-3. Run `npm run twitch:auth` and authorize as the broadcaster. The token is stored in ignored `data/twitch-token.json`.
-4. Start the server with `npm run sandbox` and check `http://localhost:3000/health`. Confirm Twitch is connected and EventSub subscriptions are active.
-5. In the broadcaster's chat, send `!law when someone follows grow blue horns`, then vote `yes`. Broadcaster-authored chat is processed, so one account can test proposal and vote commands.
-6. From a second account, follow the channel and confirm the EventSub notification and matching law effect. A broadcaster cannot follow their own channel.
+1. Create a Twitch developer app. The category does not matter. Set the redirect URL to `http://localhost:3001/auth/callback`.
+2. Put the client ID and secret in `.env` as `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`, and set `TWITCH_REDIRECT_URI=http://localhost:3001/auth/callback`.
+3. Run `npm run twitch:auth` and authorize as the broadcaster. The token is saved in `data/twitch-token.json`, which git ignores.
+4. Start the server with `npm run sandbox` and open `http://localhost:3000/health`. Twitch should show as connected, with the EventSub subscriptions active.
+5. In the broadcaster's chat, send `!law when someone follows grow blue horns`, then vote `yes`. The broadcaster's own messages are processed, so one account can test proposals and votes.
+6. From a second account, follow the channel and watch for the matching law to fire. A broadcaster cannot follow their own channel.
 
-Required broadcaster scopes: `user:read:chat`, `moderator:read:followers`, `channel:read:subscriptions`, `bits:read`, and `channel:read:hype_train`. Raids require no OAuth scope. `user:write:chat` is optional and only needed with `CHAT_REPLIES=on`.
+The broadcaster needs these scopes: `user:read:chat`, `moderator:read:followers`, `channel:read:subscriptions`, `bits:read` and `channel:read:hype_train`. Raids need no scope. `user:write:chat` is only needed with `CHAT_REPLIES=on`, which is off by default.
 
-For a recording session with real chat, `npm run live` starts the server with short vote timers, a separate `data-live` folder (your real beast is untouched) and scheduled ballots turned off, because a ballot blocks new `!law` proposals while it is open. Open one on demand with `npm run ballot`; chat then types `1`, `2` or `3`. Each viewer can propose once a minute, and only one vote runs at a time.
+For local EventSub mocks, run `twitch event websocket start-server --port 8080`, set `TWURPLE_MOCK_API_PORT=8080` (or `TWITCH_EVENTSUB_WS_URL`), then trigger events with `twitch event trigger channel.follow -T websocket --session SESSION_ID -u BROADCASTER_ID`. The payload options vary with the Twitch CLI version.
 
-For local EventSub mocks, run `twitch event websocket start-server --port 8080`, set `TWURPLE_MOCK_API_PORT=8080` (or `TWITCH_EVENTSUB_WS_URL`), then trigger events with `twitch event trigger channel.follow -T websocket --session SESSION_ID -u BROADCASTER_ID`. The Twitch CLI's available payload options vary by version.
+### Recording helpers
+
+These scripts exist so I could record clean footage. They only call the same endpoints the sandbox uses.
+
+| Command | What it does |
+| --- | --- |
+| `npm run live` | Starts the server for a recording with real chat: 15-second votes, a separate `data-live` folder so your real beast is untouched, and scheduled ballots off (an open ballot blocks new `!law` proposals). |
+| `npm run live:guide` | Prints in the terminal what to type at each moment (a vote opens, a law passes, a crisis opens). It only reads. |
+| `npm run ballot` | Opens a ballot on demand on the live server. |
+| `npm run demo:auto` | Like `npm run demo`, but starts by itself after 20 seconds. |
+| `npm run refusals`, `npm run crisis:setup` then `npm run crisis`, `npm run ballot:scene`, `npm run repeal:scene`, `npm run panel` | Play one scene of the demo on a running sandbox server so it can be recorded on its own. |
+
+Add `?bg=dark` to the overlay URL to paint a dark backdrop when you record it in a normal browser tab. OBS keeps it transparent without that.
 
 ### OBS scene setup
 
-In OBS, enable the WebSocket server in **Tools → WebSocket Server Settings** and set a password. Configure `OBS_WS_URL`, `OBS_WS_PASSWORD`, and exact scene names in `OBS_SCENE_1`, `OBS_SCENE_2`, and `OBS_SCENE_3`; `SCENE_RETURN_SECONDS` defaults to 6. Chat can choose only the three numbered actions, never a scene name. OBS switching is mock-tested, not live-verified.
+In OBS, turn on the WebSocket server under Tools, WebSocket Server Settings, and set a password. Set `OBS_WS_URL`, `OBS_WS_PASSWORD` and the exact scene names in `OBS_SCENE_1`, `OBS_SCENE_2` and `OBS_SCENE_3`. `SCENE_RETURN_SECONDS` defaults to 6. Chat can pick only the three numbered actions, never a scene name. OBS switching is tested with mocks only.
 
 ## Resilience
 
-A network hiccup must not take the overlay down mid-stream. While testing live, a keepalive timeout on the Twitch WebSocket crashed the whole server: the `ws` library emitted an `error` event on a socket that was still reconnecting, and nothing was listening.
+A network hiccup must not take the overlay down mid-stream. While I was testing live, a keepalive timeout on the Twitch WebSocket crashed the whole server: the `ws` library emitted an `error` event on a socket that was still reconnecting, and nothing was listening.
 
-- **Process guards.** `uncaughtException` and `unhandledRejection` handlers contain errors whose origin is the Twitch, OBS or WebSocket layer (or a plain network error code) and log them. Errors thrown from this project's own code still exit with a non-zero code, so real bugs are never hidden.
-- **Supervisor.** Twurple retries on its own; if Twitch is still disconnected after 5s, then 10s, 20s and 30s (capped), the listener is stopped and started again. A failed first start (for example, no network at launch) is retried the same way.
-- **Visibility.** `/health` reports `twitchConnected`, `twitchReconnecting`, `lastDisconnectAt` and `reconnectAttempts`; the sandbox shows "Twitch: reconnecting…"; the overlay shows a small "Twitch reconnecting" dot (add `?obs=1` to hide it in OBS).
-- **Still serving.** The overlay and sandbox keep working from saved state while Twitch is down.
+- Process guards catch `uncaughtException` and `unhandledRejection` when the error comes from the Twitch, OBS or WebSocket layer, or is a plain network error, and log it. An error thrown from this project's own code still exits with a non-zero code, so real bugs are not hidden.
+- Twurple retries by itself. If Twitch is still disconnected after 5, 10, 20 and then every 30 seconds, a supervisor stops the listener and starts it again. A failed first start, such as no network at launch, is retried the same way.
+- `/health` reports `twitchConnected`, `twitchReconnecting`, `lastDisconnectAt` and `reconnectAttempts`. The sandbox shows "Twitch: reconnecting", and the overlay shows a small dot (add `?obs=1` to hide it in OBS).
+- The overlay and sandbox keep working from saved state while Twitch is down.
 
-Verified by 14 unit tests (including the exact error shape from the crash) and a live test: the server process was frozen for 40 seconds to mimic a laptop sleeping, then resumed. It stayed up, logged the disconnect, reconnected on its own, and `/health` showed all 7 subscriptions active again.
+This is covered by 14 unit tests, including the exact error shape from the crash. I also froze the server process for 40 seconds to mimic a laptop going to sleep. It stayed up, logged the disconnect, reconnected on its own, and `/health` showed all seven subscriptions active again.
 
 ## Known limitations
 
-- The law language is narrow; unsupported or ambiguous phrasing may be refused or safely defaulted. The held-out scores above show its limits.
-- Ollama must be running locally for model rescue, and rescue results vary. Ollama is optional; the parser remains available without it.
-- Twitch requires a developer app, broadcaster authorization, and the listed scopes. Follow testing needs another account.
-- OBS scene actions require a configured, reachable OBS WebSocket server and mapped scene names; only mock behavior has been verified.
-- Chat commands (`!law`, `!laws`, `!repeal`, votes) are covered by unit tests of the command parser and the engine; the `!law` + vote path has also been exercised with real Twitch chat. Real-chat checks of `!laws`, `!repeal` and `!beast` controls, and a real follow event, were not done when this was written.
-- Sound cues were verified to build and stay under two seconds with a recording audio stub; how they sound was not verified in a listening test.
+- The law language is narrow. Unsupported or ambiguous phrasing may be refused or safely defaulted, as the held-out scores show.
+- Ollama has to be running locally for model rescue, and its results vary. Without it, the parser handles everything it understands.
+- Twitch needs a developer app, broadcaster authorization and the scopes above. Testing a follow needs a second account.
+- OBS scene actions need a reachable OBS WebSocket server and mapped scene names. Only the mocks have been tested.
+- I have tried `!law`, votes, `!laws`, `!name`, the crisis vote, the ballot and a real follow from a second account in real Twitch chat. `!repeal` and the `!beast` controls are covered by tests, and I have not tried them live.
+- The sound cues are synthesized in the browser. Tests check that they build and stay under two seconds, but I have not had a proper listening session.
