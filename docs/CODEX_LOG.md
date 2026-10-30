@@ -299,3 +299,9 @@
 - **Produced:** `scripts/ballot-scene.ts` and `npm run ballot:scene`, which open a ballot on a running sandbox server, cast simulated votes (three for option 2, one for option 1) and wait for the winner. It watches the server state and stops with a plain message if the ballot cannot open. No application code changed.
 - **Checks:** run live: the winning suggestion became a law on the beast. `npm run lint` and `npm run build` pass.
 
+## `npm run panel` for recording (written with another AI assistant, not Codex)
+
+- **Why:** The `!constitution`, `!laws` and `!tongue` panels needed a one-command way to be shown on the overlay for a screen recording without typing in Twitch chat.
+- **Produced:** `scripts/panel.ts` and `npm run panel [constitution|laws|tongue]`, which call the existing sandbox panel endpoint. No application code changed.
+- **Checks:** run live after a crisis and a ballot: the overlay showed the constitution panel and `/constitution.html` listed the overruled and in-force articles. `npm run lint` and `npm run build` pass.
+
