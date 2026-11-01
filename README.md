@@ -24,6 +24,18 @@ npm run demo
 
 To use it on a real stream, add the overlay URL to OBS as a browser source and follow the Twitch setup below.
 
+## Checking it yourself
+
+I tested this on macOS with Node 24 and npm 11. Windows and Linux are untested. These three commands check the project, and the first one runs all 268 tests:
+
+```sh
+npm test
+npm run build
+npm run lint
+```
+
+Everything you see is drawn or synthesized in this repository: the beast is SVG, and the sounds are generated in the browser. There are no third-party images, models, fonts or audio files.
+
 ## How it differs from other stream tools
 
 - Node-editor automation tools ask the streamer to build the logic alone, in a graph most viewers cannot read. Here a viewer writes the logic as one sentence, and the result is a picture.
