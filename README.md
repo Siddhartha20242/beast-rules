@@ -6,6 +6,8 @@ Each law in force takes one part of the beast's body. When two laws want the sam
 
 I built it alone for the Codex x TwitchCon Hackathon. Codex wrote most of the code. When its free credits ran out I finished the last features with another AI assistant, and the [build log](docs/CODEX_LOG.md) says which step is which.
 
+Demo video: [https://www.youtube.com/watch?v=mKi2qwJ50zU](https://www.youtube.com/watch?v=mKi2qwJ50zU)
+
 ![How a law travels from Twitch chat to the beast](docs/images/architecture.png)
 
 ## Try it in 60 seconds
